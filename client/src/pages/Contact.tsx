@@ -5,22 +5,41 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
 
 export default function Contact() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   const { toast } = useToast();
   
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    // Simulating form submission
-    setTimeout(() => {
+  // Use React Query mutation for API call
+  const contactMutation = useMutation<any, Error, { name: string; email: string; subject: string; message: string }>({
+    mutationFn: async (contactData: { name: string; email: string; subject: string; message: string }) => {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(contactData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to send message");
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setSuccess("Your message has been sent successfully");
       toast({
         title: "Message sent",
         description: "We'll get back to you as soon as possible.",
@@ -31,8 +50,37 @@ export default function Contact() {
       setEmail("");
       setSubject("");
       setMessage("");
-      setIsSubmitting(false);
-    }, 1000);
+    },
+    onError: (error: Error) => {
+      setError(error.message || "Failed to send message. Please try again later.");
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message. Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    
+    // Basic validation
+    if (!name || !email || !subject || !message) {
+      setError("All fields are required");
+      return;
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Please provide a valid email address");
+      return;
+    }
+    
+    // Submit form to API endpoint
+    contactMutation.mutate({ name, email, subject, message });
   };
   
   return (
@@ -77,6 +125,20 @@ export default function Contact() {
           </div>
           
           <div>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {success && (
+              <Alert className="mb-4 bg-green-50 text-green-700 border-green-200">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
+            )}
+          
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -129,9 +191,9 @@ export default function Contact() {
               <Button 
                 type="submit" 
                 className="w-full bg-[#FF0000] hover:bg-[#CC0000]"
-                disabled={isSubmitting}
+                disabled={contactMutation.isPending}
               >
-                {isSubmitting ? "Sending..." : "Send Message"}
+                {contactMutation.isPending ? "Sending..." : "Send Message"}
               </Button>
             </form>
           </div>
