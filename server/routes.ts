@@ -537,11 +537,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/download/file/:downloadId", (req: Request, res: Response) => {
     try {
       const { downloadId } = req.params;
+      console.log(`Initiating direct file download for:`, downloadId);
       
       // Get download information
       const downloadInfo = activeDownloads.get(downloadId);
       
       if (!downloadInfo || !downloadInfo.filePath) {
+        console.log(`Download info missing for ID: ${downloadId}`);
         return res.status(404).json({
           success: false,
           message: "Download not found or file path unavailable."
@@ -550,6 +552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If download is still in progress
       if (!downloadInfo.completed && !downloadInfo.success && !downloadInfo.error) {
+        console.log(`Download still in progress: ${downloadInfo.progress || 0}%`);
         return res.json({
           success: true,
           status: "in_progress",
@@ -560,6 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If there was an error
       if (downloadInfo.error) {
+        console.log(`Download error reported: ${downloadInfo.message}`);
         return res.json({
           success: false,
           status: "error",
@@ -567,32 +571,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // If download completed successfully
+      // Check if file exists and has a size > 0
       if (downloadInfo.filePath && fs.existsSync(downloadInfo.filePath)) {
+        const fileStats = fs.statSync(downloadInfo.filePath);
         const filename = path.basename(downloadInfo.filePath);
         
-        // Set headers for browser to download the file
+        // Log file information for debugging
+        console.log(`Downloading file: ${filename}, Size: ${fileStats.size} bytes`);
+        
+        if (fileStats.size === 0) {
+          console.error(`Error: File exists but has zero size: ${downloadInfo.filePath}`);
+          return res.status(500).json({
+            success: false,
+            message: "The downloaded file is empty (0 bytes). Please try downloading again."
+          });
+        }
+        
+        // Determine appropriate content type based on file extension
+        const ext = path.extname(filename).toLowerCase();
+        let contentType = 'application/octet-stream'; // Default
+        
+        if (ext === '.mp4' || ext === '.m4v') {
+          contentType = 'video/mp4';
+        } else if (ext === '.mp3') {
+          contentType = 'audio/mpeg';
+        } else if (ext === '.webm') {
+          contentType = 'video/webm';
+        } else if (ext === '.ogg') {
+          contentType = 'audio/ogg';
+        } else if (ext === '.wav') {
+          contentType = 'audio/wav';
+        } else if (ext === '.mov') {
+          contentType = 'video/quicktime';
+        }
+        
+        // Set proper headers for browser to download the file
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', fileStats.size);
         
-        // Stream the file to the client
+        console.log(`Set content type to: ${contentType} for file: ${filename}`);
+        
+        // Stream the file to the client with proper error handling
         const fileStream = fs.createReadStream(downloadInfo.filePath);
-        fileStream.pipe(res);
         
-        // Handle errors
+        // Handle errors during streaming
         fileStream.on('error', (err) => {
-          console.error('Error streaming file:', err);
+          console.error(`Error streaming file ${filename}:`, err);
           if (!res.headersSent) {
             res.status(500).json({
               success: false,
               message: "Error streaming file to client."
             });
+          } else {
+            res.end();
           }
         });
         
-        // When download is complete, schedule the file for deletion
-        fileStream.on('close', () => {
-          // Delete the file after a short delay to ensure it's fully sent
+        // Use proper finish event to detect when response is complete
+        res.on('finish', () => {
+          console.log(`Finished sending file: ${filename}`);
+          
+          // Delete the file after a delay to ensure it's fully sent
           setTimeout(() => {
             try {
               if (fs.existsSync(downloadInfo.filePath)) {
@@ -602,9 +642,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch (err) {
               console.error('Error deleting file:', err);
             }
-          }, 5000);
+          }, 10000); // 10 second delay to ensure file is fully downloaded by client
         });
         
+        // Pipe the file stream to the response
+        fileStream.pipe(res);
         return;
       } else {
         return res.status(404).json({

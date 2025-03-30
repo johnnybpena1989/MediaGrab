@@ -549,14 +549,21 @@ export function downloadMedia(
         "--add-header", "sec-ch-ua-platform:\"Android\""
       );
     } else if (platform === "TikTok") {
-      // TikTok-specific options to ensure better download success
+      // Enhanced TikTok-specific options to ensure better download success
       ytDlpArgs.push(
         "--user-agent", 
         getRandomUserAgent(true),
         "--extractor-args",
         "tiktok:api_hostname=m.tiktok.com",
-        "--no-check-formats", // Don't verify formats before downloading
-        "--force-overwrites"  // Overwrite if file exists
+        "--extractor-args",
+        "tiktok:download_preference=no_watermark", // Try to get version without watermark
+        "--retries", "3",         // Retry up to 3 times
+        "--fragment-retries", "5", // Retry up to 5 times for fragments
+        "--hls-prefer-native",    // Use the native HLS downloader 
+        "--fixup", "warn",        // Try to fix errors in the downloaded file
+        "--no-check-formats",     // Don't verify formats before downloading
+        "--force-overwrites",     // Overwrite if file exists
+        "--merge-output-format", "mp4" // Ensure final output is MP4
       );
     } else if (platform === "Instagram") {
       // Instagram-specific options
@@ -602,13 +609,19 @@ export function downloadMedia(
     } else if (platform === "X") {
       ytDlpArgs.push("--referer", "https://twitter.com/");
     } else if (platform === "TikTok") {
+      // Enhanced TikTok referer and headers for better download success
       ytDlpArgs.push("--referer", "https://www.tiktok.com/");
-      // Add additional TikTok headers to appear more like a browser
       ytDlpArgs.push(
         "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "--add-header", "sec-ch-ua:\"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"99\"",
         "--add-header", "sec-ch-ua-mobile:?1",
-        "--add-header", "sec-ch-ua-platform:\"Android\""
+        "--add-header", "sec-ch-ua-platform:\"Android\"",
+        "--add-header", "sec-fetch-site:none",
+        "--add-header", "sec-fetch-mode:navigate",
+        "--add-header", "sec-fetch-user:?1",
+        "--add-header", "sec-fetch-dest:document",
+        "--add-header", "priority:high"
       );
     } else if (platform === "Facebook") {
       ytDlpArgs.push("--referer", "https://www.facebook.com/");
