@@ -49,80 +49,57 @@ export async function analyzeUrl(url: string) {
       fs.mkdirSync(downloadsDir, { recursive: true });
     }
 
-    // Run youtube-dl to get information about the video
-    const { stdout } = await execAsync(`yt-dlp --dump-json "${url}"`);
-    const info = JSON.parse(stdout);
-    
-    // Extract video formats
-    const videoFormats: any[] = [];
-    const audioFormats: any[] = [];
-    
-    // Parse formats
-    if (info.formats) {
-      // Video formats (with video stream)
-      const uniqueResolutions = new Set();
+    // First, try with the standard approach
+    try {
+      // Run yt-dlp to get information about the video
+      // Add a user-agent to appear more like a browser request
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        url
+      ];
       
-      info.formats.forEach((format: any) => {
-        if (format.vcodec !== 'none' && format.acodec !== 'none') {
-          // This is a format with both video and audio
-          const resolution = format.height ? `${format.height}p` : 'Unknown';
-          
-          // Skip if we already have this resolution to avoid duplicates
-          if (!uniqueResolutions.has(resolution)) {
-            uniqueResolutions.add(resolution);
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      const info = JSON.parse(stdout);
+      
+      return processVideoInfo(info, url);
+    } catch (firstError: any) {
+      console.error("First attempt error:", firstError);
+
+      // If the error is due to YouTube bot protection, try an alternative approach
+      if (firstError.stderr && firstError.stderr.includes("Sign in to confirm you're not a bot")) {
+        console.log("Bot protection detected, trying alternative approach...");
+        
+        try {
+          // For YouTube specifically, try with additional arguments that might bypass the protection
+          if (url.includes("youtube.com") || url.includes("youtu.be")) {
+            const altArgs = [
+              '--dump-json',
+              '--no-check-certificates',
+              '--no-warnings',
+              '--extractor-args', 'youtube:player_client=android',
+              '--user-agent', 'Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36',
+              url
+            ];
             
-            videoFormats.push({
-              formatId: format.format_id,
-              quality: format.height ? `${format.height}p` : 'Unknown',
-              resolution: resolution,
-              filesize: format.filesize || 0,
-              extension: format.ext || 'mp4',
-              type: 'video'
-            });
+            console.log("Trying with Android extractor args...");
+            const { stdout } = await execAsync(`yt-dlp ${altArgs.map(arg => `"${arg}"`).join(' ')}`);
+            const info = JSON.parse(stdout);
+            
+            return processVideoInfo(info, url);
           }
-        } else if (format.acodec !== 'none' && format.vcodec === 'none') {
-          // This is an audio-only format
-          audioFormats.push({
-            formatId: format.format_id,
-            quality: format.abr ? `${format.abr}kbps` : 'Unknown',
-            bitrate: format.abr ? `${format.abr}kbps` : undefined,
-            filesize: format.filesize || 0,
-            extension: format.ext || 'mp3',
-            type: 'audio'
-          });
+        } catch (secondError: any) {
+          console.error("Second attempt error:", secondError);
+          // If all attempts fail, throw the original error
+          throw firstError;
         }
-      });
+      }
+      
+      // If it's not a bot protection error or the fallback failed, throw the original error
+      throw firstError;
     }
-    
-    // Sort formats by quality (highest first for video, highest first for audio)
-    videoFormats.sort((a, b) => {
-      if (isVideoFormat(a) && isVideoFormat(b)) {
-        const heightA = parseInt((a.resolution || '0').replace('p', ''));
-        const heightB = parseInt((b.resolution || '0').replace('p', ''));
-        return heightB - heightA;
-      }
-      return 0;
-    });
-    
-    audioFormats.sort((a, b) => {
-      if (isAudioFormat(a) && isAudioFormat(b)) {
-        const bitrateA = parseInt((a.bitrate || '0').replace('kbps', ''));
-        const bitrateB = parseInt((b.bitrate || '0').replace('kbps', ''));
-        return bitrateB - bitrateA;
-      }
-      return 0;
-    });
-    
-    return {
-      title: info.title || 'Unknown Title',
-      thumbnail: info.thumbnail || '',
-      duration: formatDuration(info.duration || 0),
-      platform: getPlatformFromUrl(url),
-      formats: {
-        video: videoFormats,
-        audio: audioFormats
-      }
-    };
   } catch (error: any) {
     console.error('Error analyzing URL:', error);
     
@@ -160,6 +137,80 @@ export async function analyzeUrl(url: string) {
   }
 }
 
+// Helper function to process video information
+function processVideoInfo(info: any, url: string) {
+  // Extract video formats
+  const videoFormats: any[] = [];
+  const audioFormats: any[] = [];
+  
+  // Parse formats
+  if (info.formats) {
+    // Video formats (with video stream)
+    const uniqueResolutions = new Set();
+    
+    info.formats.forEach((format: any) => {
+      if (format.vcodec !== 'none' && format.acodec !== 'none') {
+        // This is a format with both video and audio
+        const resolution = format.height ? `${format.height}p` : 'Unknown';
+        
+        // Skip if we already have this resolution to avoid duplicates
+        if (!uniqueResolutions.has(resolution)) {
+          uniqueResolutions.add(resolution);
+          
+          videoFormats.push({
+            formatId: format.format_id,
+            quality: format.height ? `${format.height}p` : 'Unknown',
+            resolution: resolution,
+            filesize: format.filesize || 0,
+            extension: format.ext || 'mp4',
+            type: 'video'
+          });
+        }
+      } else if (format.acodec !== 'none' && format.vcodec === 'none') {
+        // This is an audio-only format
+        audioFormats.push({
+          formatId: format.format_id,
+          quality: format.abr ? `${format.abr}kbps` : 'Unknown',
+          bitrate: format.abr ? `${format.abr}kbps` : undefined,
+          filesize: format.filesize || 0,
+          extension: format.ext || 'mp3',
+          type: 'audio'
+        });
+      }
+    });
+  }
+  
+  // Sort formats by quality (highest first for video, highest first for audio)
+  videoFormats.sort((a, b) => {
+    if (isVideoFormat(a) && isVideoFormat(b)) {
+      const heightA = parseInt((a.resolution || '0').replace('p', ''));
+      const heightB = parseInt((b.resolution || '0').replace('p', ''));
+      return heightB - heightA;
+    }
+    return 0;
+  });
+  
+  audioFormats.sort((a, b) => {
+    if (isAudioFormat(a) && isAudioFormat(b)) {
+      const bitrateA = parseInt((a.bitrate || '0').replace('kbps', ''));
+      const bitrateB = parseInt((b.bitrate || '0').replace('kbps', ''));
+      return bitrateB - bitrateA;
+    }
+    return 0;
+  });
+  
+  return {
+    title: info.title || 'Unknown Title',
+    thumbnail: info.thumbnail || '',
+    duration: formatDuration(info.duration || 0),
+    platform: getPlatformFromUrl(url),
+    formats: {
+      video: videoFormats,
+      audio: audioFormats
+    }
+  };
+}
+
 // Download media file
 export function downloadMedia(
   url: string, 
@@ -172,14 +223,34 @@ export function downloadMedia(
     const downloadsDir = path.join(process.cwd(), "downloads");
     const outputTemplate = path.join(downloadsDir, `%(title)s-${Date.now()}.%(ext)s`);
     
-    // Build the youtube-dl command
+    // Build the youtube-dl command with options to bypass bot protection
     const ytDlpArgs = [
       "--newline",
       "--progress",
       "-f", formatId,
       "-o", outputTemplate,
-      url
+      "--no-check-certificates",
+      "--no-warnings"
     ];
+    
+    // Add extra parameters to try bypassing YouTube bot protection
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      ytDlpArgs.push(
+        "--extractor-args", 
+        "youtube:player_client=android",
+        "--user-agent", 
+        "Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36"
+      );
+    } else {
+      // For other platforms, use a regular browser UA
+      ytDlpArgs.push(
+        "--user-agent", 
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+      );
+    }
+    
+    // Add the URL last
+    ytDlpArgs.push(url);
     
     const downloadProcess = spawn("yt-dlp", ytDlpArgs);
     let filePath = '';

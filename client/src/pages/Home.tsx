@@ -221,15 +221,40 @@ export default function Home() {
                   </div>
                   <h3 className="text-lg font-medium text-red-800 mb-2">Unable to analyze video</h3>
                   <p className="text-sm text-red-600 mb-4">{analyzeError}</p>
-                  <button 
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                    onClick={() => {
-                      setAnalyzeError(null);
-                      setUrl("");
-                    }}
-                  >
-                    Try a different URL
-                  </button>
+                  
+                  {analyzeError.includes("bot protection") && (
+                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg w-full">
+                      <h4 className="text-sm font-medium text-amber-800 mb-1">YouTube Bot Protection Detected</h4>
+                      <p className="text-xs text-amber-700 mb-2">
+                        YouTube has increased its security measures and detected our download request as automated activity.
+                      </p>
+                      <p className="text-xs text-amber-700">
+                        Try a different video or try again later when YouTube's security checks reset.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-3">
+                    <button 
+                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                      onClick={() => {
+                        setAnalyzeError(null);
+                        setUrl("");
+                      }}
+                    >
+                      Try a different URL
+                    </button>
+                    
+                    <button 
+                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                      onClick={() => {
+                        setAnalyzeError(null);
+                        analyzeMutation.mutate(url);
+                      }}
+                    >
+                      Try again
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
