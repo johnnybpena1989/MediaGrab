@@ -28,19 +28,37 @@ export default function Home() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadInfo, setDownloadInfo] = useState<{ name: string; size: number; downloaded: number; remaining: string } | null>(null);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const analyzeMutation = useMutation({
     mutationFn: async (url: string) => {
-      const res = await apiRequest("POST", "/api/analyze", { url });
-      return res.json();
+      try {
+        const res = await apiRequest("POST", "/api/analyze", { url });
+        
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || "Failed to analyze URL");
+        }
+        
+        return res.json();
+      } catch (error: any) {
+        throw new Error(error.message || "Failed to analyze URL");
+      }
     },
     onSuccess: (data) => {
       setMediaData(data);
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Clear any existing media data
+      setMediaData(null);
+      
+      // Set the error message for UI display
+      setAnalyzeError(error.message || "Failed to analyze URL. Please try a different video or try again later.");
+      
+      // Display error toast with specific message
       toast({
         title: "Error analyzing URL",
         description: error.message || "Please try a different URL or try again later.",
@@ -54,39 +72,77 @@ export default function Home() {
       setIsDownloading(true);
       setDownloadProgress(0);
       
-      // Create EventSource for progress updates
-      const eventSource = new EventSource(`/api/download/progress`);
-      
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setDownloadProgress(data.progress);
-        setDownloadInfo({
-          name: data.filename,
-          size: data.totalSize,
-          downloaded: data.downloadedSize,
-          remaining: data.remainingTime
+      try {
+        // Start the download first
+        const res = await apiRequest("POST", "/api/download", { 
+          url, 
+          format: format.formatId,
+          quality: format.quality 
         });
         
-        if (data.progress >= 100) {
-          eventSource.close();
-          setIsDownloading(false);
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || "Failed to start download");
         }
-      };
-      
-      eventSource.onerror = () => {
-        eventSource.close();
-      };
-      
-      // Start the download
-      const res = await apiRequest("POST", "/api/download", { 
-        url, 
-        format: format.formatId,
-        quality: format.quality 
-      });
-      
-      return res.json();
+        
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || "Failed to start download");
+        }
+        
+        // Create EventSource for progress updates
+        const eventSource = new EventSource(`/api/download/progress`);
+        
+        return new Promise((resolve, reject) => {
+          eventSource.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              // Check if there's an error
+              if (data.error) {
+                eventSource.close();
+                setIsDownloading(false);
+                reject(new Error(data.message || "Download failed"));
+                return;
+              }
+              
+              setDownloadProgress(data.progress || 0);
+              setDownloadInfo({
+                name: data.filename || "Downloading...",
+                size: data.totalSize || 0,
+                downloaded: data.downloadedSize || 0,
+                remaining: data.remainingTime || "Calculating..."
+              });
+              
+              if (data.progress >= 100) {
+                eventSource.close();
+                setIsDownloading(false);
+                resolve({ success: true, message: "Download complete" });
+              }
+            } catch (err) {
+              console.error("Error parsing SSE data:", err);
+            }
+          };
+          
+          eventSource.onerror = (err) => {
+            console.error("SSE error:", err);
+            eventSource.close();
+            setIsDownloading(false);
+            reject(new Error("Connection to download stream lost. Please try again."));
+          };
+        });
+      } catch (error: any) {
+        setIsDownloading(false);
+        throw new Error(error.message || "Failed to download media");
+      }
     },
-    onError: (error) => {
+    onSuccess: () => {
+      toast({
+        title: "Download complete",
+        description: "Your media has been successfully downloaded.",
+      });
+    },
+    onError: (error: any) => {
       setIsDownloading(false);
       toast({
         title: "Download failed",
@@ -98,7 +154,11 @@ export default function Home() {
 
   const handleUrlSubmit = async (url: string) => {
     if (!url) return;
+    // Reset previous state
     setMediaData(null);
+    setAnalyzeError(null);
+    
+    // Start new analysis
     analyzeMutation.mutate(url);
   };
 
@@ -147,6 +207,29 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                   <p>Analyzing URL...</p>
+                </div>
+              </div>
+            )}
+            
+            {!analyzeMutation.isPending && analyzeError && !mediaData && (
+              <div className="bg-red-50 border border-red-200 rounded-lg shadow-md p-6 mb-8">
+                <div className="flex flex-col items-center text-center">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-red-800 mb-2">Unable to analyze video</h3>
+                  <p className="text-sm text-red-600 mb-4">{analyzeError}</p>
+                  <button 
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                    onClick={() => {
+                      setAnalyzeError(null);
+                      setUrl("");
+                    }}
+                  >
+                    Try a different URL
+                  </button>
                 </div>
               </div>
             )}

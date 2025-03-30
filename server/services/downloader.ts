@@ -123,9 +123,40 @@ export async function analyzeUrl(url: string) {
         audio: audioFormats
       }
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error analyzing URL:', error);
-    throw new Error('Failed to analyze URL');
+    
+    // Get the error message or stderr if available
+    const errorOutput = error.stderr || error.message || 'Unknown error';
+    console.error('Error details:', errorOutput);
+    
+    // Check for specific error patterns and provide user-friendly messages
+    const errorPatterns = [
+      { pattern: "Sign in to confirm you're not a bot", message: 'YouTube bot protection triggered. Please try a different URL or try again later.' },
+      { pattern: "is not available in your country", message: 'This content is not available in your region due to restrictions.' },
+      { pattern: "Private video", message: 'This video is private and cannot be accessed.' },
+      { pattern: "age-restricted", message: 'This content is age-restricted and cannot be downloaded.' },
+      { pattern: "This video is unavailable", message: 'This video is unavailable or has been removed.' },
+      { pattern: "COPYRIGHT_CLAIM", message: 'This content has been removed due to a copyright claim.' },
+      { pattern: "Unable to extract", message: 'Unable to extract video information. The link may be invalid or content is no longer available.' },
+      { pattern: "Unsupported URL", message: 'Unsupported URL or website. Please try with a URL from a supported platform (YouTube, Instagram, Twitter, Facebook, TikTok).' },
+      { pattern: "Premieres in", message: 'This video is a premiere and has not been released yet.' },
+      { pattern: "This live event will begin in", message: 'This is a scheduled live stream that has not started yet.' },
+      { pattern: "doesn't exist", message: 'This content does not exist or has been removed.' },
+      { pattern: "sign in", message: 'This content requires sign-in and cannot be accessed.' },
+      { pattern: "members only", message: 'This content is for channel members only and cannot be accessed.' },
+      { pattern: "requested format not available", message: 'The requested video format is not available.' }
+    ];
+    
+    // Check each pattern against the error output
+    for (const { pattern, message } of errorPatterns) {
+      if (errorOutput.includes(pattern)) {
+        throw new Error(message);
+      }
+    }
+    
+    // If no specific error pattern was matched, return a general error
+    throw new Error(`Failed to analyze URL: ${error.message || 'Unknown error'}. Please verify the URL is correct and try again.`);
   }
 }
 
@@ -225,8 +256,52 @@ export function downloadMedia(
       }
     });
     
+    // Buffer to collect stderr for error analysis
+    let stderrBuffer = '';
+    
     downloadProcess.stderr.on("data", (data) => {
-      console.error(`Error: ${data}`);
+      const errorOutput = data.toString();
+      console.error(`Error: ${errorOutput}`);
+      stderrBuffer += errorOutput;
+      
+      // Update active downloads with error status so the frontend knows about it
+      const currentProgress = activeDownloads.get(downloadId);
+      if (currentProgress) {
+        currentProgress.error = true;
+        currentProgress.message = 'Error detected during download. Check logs for details.';
+        activeDownloads.set(downloadId, currentProgress);
+      }
+      
+      // Check for common errors in real-time and handle appropriately
+      const errorHandlers = [
+        { pattern: "Sign in to confirm you're not a bot", message: 'YouTube bot protection triggered. Please try a different URL or try again later.' },
+        { pattern: "is not available in your country", message: 'This content is not available in your region due to restrictions.' },
+        { pattern: "Private video", message: 'This video is private and cannot be accessed.' },
+        { pattern: "age-restricted", message: 'This content is age-restricted and cannot be downloaded.' },
+        { pattern: "This video is unavailable", message: 'This video is unavailable or has been removed.' },
+        { pattern: "Unable to extract", message: 'Unable to extract video information. The link may be invalid or content is no longer available.' },
+        { pattern: "Unable to download", message: 'Unable to download. The video format may be incompatible or protected.' },
+        { pattern: "requested format not available", message: 'The requested format is not available for this video. Please try a different format.' },
+        { pattern: "Network is unreachable", message: 'Network error. Please check your internet connection and try again.' },
+        { pattern: "ERROR: ", message: 'Download failed: Technical error encountered.' }
+      ];
+      
+      for (const handler of errorHandlers) {
+        if (errorOutput.includes(handler.pattern)) {
+          // Update active downloads with specific error message
+          if (currentProgress) {
+            currentProgress.error = true;
+            currentProgress.message = handler.message;
+            activeDownloads.set(downloadId, currentProgress);
+          }
+          
+          // Kill the process and notify callback
+          downloadProcess.kill();
+          activeDownloads.delete(downloadId);
+          callback(new Error(handler.message));
+          return;
+        }
+      }
     });
     
     downloadProcess.on("close", (code) => {
@@ -235,13 +310,38 @@ export function downloadMedia(
       if (code === 0) {
         callback(null, filePath);
       } else {
-        callback(new Error(`Download process exited with code ${code}`));
+        // Check the stderr buffer for known error patterns
+        if (stderrBuffer.includes("Sign in to confirm you're not a bot")) {
+          callback(new Error('YouTube bot protection triggered. Please try a different URL or try again later.'));
+        } else if (stderrBuffer.includes("is not available in your country")) {
+          callback(new Error('This content is not available in your region due to restrictions.'));
+        } else if (stderrBuffer.includes("Private video")) {
+          callback(new Error('This video is private and cannot be accessed.'));
+        } else if (stderrBuffer.includes("age-restricted")) {
+          callback(new Error('This content is age-restricted and cannot be downloaded.'));
+        } else if (stderrBuffer.includes("This video is unavailable")) {
+          callback(new Error('This video is unavailable or has been removed.'));
+        } else {
+          callback(new Error(`Download failed with exit code ${code}. Please try a different video or format.`));
+        }
       }
     });
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error starting download:', error);
-    callback(error as Error);
+    
+    // Check for common download errors
+    if (error.message && error.message.includes("bot")) {
+      callback(new Error('YouTube bot protection triggered. Please try a different URL or try again later.'));
+    } else if (error.message && error.message.includes("region")) {
+      callback(new Error('This content is not available in your region due to restrictions.'));
+    } else if (error.message && error.message.includes("private")) {
+      callback(new Error('This video is private and cannot be accessed.'));
+    } else if (error.message && error.message.includes("age")) {
+      callback(new Error('This content is age-restricted and cannot be downloaded.'));
+    } else {
+      callback(new Error(`Download failed: ${error.message || 'Unknown error'}`));
+    }
   }
 }
 
