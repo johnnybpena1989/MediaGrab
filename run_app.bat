@@ -137,6 +137,14 @@ echo.
 echo Starting the Media Downloader application...
 echo Environment: %INSTALL_DIR%
 echo.
+
+:: Set up environment for local development
+echo Setting up local environment variables...
+set LOCAL_ENV=true
+set NODE_ENV=development
+
+:: Start the application in development mode
+echo Starting the application in development mode...
 call npm run dev
 
 :: Keep the window open on error

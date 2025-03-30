@@ -71,6 +71,8 @@ npm run dev
 - **yt-dlp not found**: The script will attempt to download it automatically. If it fails, download it manually from [yt-dlp's GitHub](https://github.com/yt-dlp/yt-dlp/releases) and place it in the `bin` folder.
 - **Download not starting**: Check if your URL is from a supported platform and is publicly accessible.
 - **Quality options not showing**: Some platforms limit the available quality options. Try a different video.
+- **ENOTSUP error when starting the server**: This has been fixed in the latest version. The script now automatically sets `LOCAL_ENV=true` which makes the server listen on `127.0.0.1` (localhost) instead of `0.0.0.0`, which resolves this issue on Windows systems.
+- **Port already in use**: If port 5000 is already in use on your system, either close the application using it or modify the port number in `server/index.ts` file.
 
 ### Logs
 

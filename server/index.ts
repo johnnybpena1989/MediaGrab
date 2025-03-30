@@ -59,7 +59,13 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  
+  // Force development mode for local environments
+  const isLocalDev = process.env.LOCAL_ENV === 'true';
+  
+  if (app.get("env") === "development" || isLocalDev) {
+    // Always use development mode for local installations
+    process.env.NODE_ENV = 'development';
     await setupVite(app, server);
   } else {
     serveStatic(app);
@@ -69,7 +75,34 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
-  server.listen(port, "::", () => {
-    log(`serving on port ${port}`);
-  });
+  
+  // Check if we're running in a local environment or on Replit
+  const isReplit = process.env.REPL_ID || process.env.REPLIT_DEPLOYMENT_ID;
+  const isLocalEnv = process.env.LOCAL_ENV === 'true';
+  
+  if (isReplit) {
+    // On Replit, use "::" (IPv6 equivalent of 0.0.0.0) to listen on all interfaces
+    server.listen(port, "::", () => {
+      log(`serving on port ${port} (Replit environment)`);
+    });
+  } else if (isLocalEnv) {
+    // On local environments with the LOCAL_ENV flag, use 127.0.0.1
+    server.listen(port, "127.0.0.1", () => {
+      log(`serving on port ${port} (local Windows environment)`);
+    });
+  } else {
+    // Default case - use different approaches based on the platform
+    try {
+      // First try with 0.0.0.0 which works on most systems
+      server.listen(port, "0.0.0.0", () => {
+        log(`serving on port ${port} (using 0.0.0.0)`);
+      });
+    } catch (err) {
+      // If that fails, fall back to localhost
+      console.error("Failed to bind to 0.0.0.0, falling back to 127.0.0.1");
+      server.listen(port, "127.0.0.1", () => {
+        log(`serving on port ${port} (fallback to localhost)`);
+      });
+    }
+  }
 })();
