@@ -269,7 +269,7 @@ async function analyzeGenericUrl(url: string) {
 async function analyzeYouTubeUrl(url: string) {
   // Try multiple approaches to bypass YouTube restrictions
   const approaches = [
-    // 1. Try Android client approach (often works well)
+    // 1. Try Android client approach with improved headers (often works well)
     async () => {
       console.log("Trying Android client approach...");
       await randomDelay(100, 500); // Short delay to seem more natural
@@ -280,6 +280,10 @@ async function analyzeYouTubeUrl(url: string) {
         '--no-warnings',
         '--extractor-args', 'youtube:player_client=android',
         '--user-agent', getRandomUserAgent(true), // Mobile user agent
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--add-header', 'sec-ch-ua:"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="99"',
+        '--add-header', 'sec-ch-ua-mobile:?1',
+        '--add-header', 'sec-ch-ua-platform:"Android"',
         url
       ];
       
@@ -287,7 +291,7 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 2. Try iOS client approach
+    // 2. Try iOS client approach with improved headers
     async () => {
       console.log("Trying iOS client approach...");
       await randomDelay(300, 800);
@@ -298,6 +302,10 @@ async function analyzeYouTubeUrl(url: string) {
         '--no-warnings',
         '--extractor-args', 'youtube:player_client=ios',
         '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--add-header', 'sec-ch-ua:"Safari";v="17.3"',
+        '--add-header', 'sec-ch-ua-mobile:?1',
+        '--add-header', 'sec-ch-ua-platform:"iOS"',
         url
       ];
       
@@ -305,9 +313,9 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 3. Try web client with tweaked headers
+    // 3. Try web client with enhanced headers
     async () => {
-      console.log("Trying web client with custom headers...");
+      console.log("Trying web client with enhanced headers...");
       await randomDelay(200, 700);
       
       const args = [
@@ -316,6 +324,10 @@ async function analyzeYouTubeUrl(url: string) {
         '--no-warnings',
         '--add-header', 'Origin:https://www.youtube.com',
         '--add-header', 'Referer:https://www.youtube.com/',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--add-header', 'sec-ch-ua:"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="99"',
+        '--add-header', 'sec-ch-ua-mobile:?0',
+        '--add-header', 'sec-ch-ua-platform:"Windows"',
         '--user-agent', getRandomUserAgent(false),
         url
       ];
@@ -324,7 +336,7 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 4. Try with alternative URL format (embed)
+    // 4. Try with alternative URL format (embed) and enhanced headers
     async () => {
       console.log("Trying embed URL format...");
       await randomDelay(300, 900);
@@ -343,8 +355,61 @@ async function analyzeYouTubeUrl(url: string) {
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--add-header', 'Referer:https://www.google.com/',
         '--user-agent', getRandomUserAgent(false),
         embedUrl
+      ];
+      
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    },
+    
+    // 5. Try with YouTube mobile site URL
+    async () => {
+      console.log("Trying mobile site URL...");
+      await randomDelay(300, 800);
+      
+      let videoId = "";
+      if (url.includes("youtube.com/watch?v=")) {
+        videoId = url.split("v=")[1].split("&")[0];
+      } else if (url.includes("youtu.be/")) {
+        videoId = url.split("youtu.be/")[1].split("?")[0];
+      }
+      
+      if (!videoId) throw new Error("Could not extract video ID");
+      
+      const mobileUrl = `https://m.youtube.com/watch?v=${videoId}`;
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--add-header', 'sec-ch-ua-mobile:?1',
+        '--add-header', 'sec-ch-ua-platform:"Android"',
+        '--user-agent', getRandomUserAgent(true),
+        mobileUrl
+      ];
+      
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    },
+    
+    // 6. Try with YouTube API approach
+    async () => {
+      console.log("Trying YouTube API approach...");
+      await randomDelay(400, 900);
+      
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_skip=js',
+        '--extractor-args', 'youtube:player_client=web',
+        '--add-header', 'X-YouTube-Client-Name:1',
+        '--add-header', 'X-YouTube-Client-Version:2.20240322.09.00',
+        '--user-agent', getRandomUserAgent(false),
+        url
       ];
       
       const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
@@ -472,12 +537,16 @@ export function downloadMedia(
     
     // Add platform-specific parameters
     if (platform === "YouTube") {
-      // For YouTube, use mobile client approach which tends to work better
+      // For YouTube, use mobile client approach with enhanced headers
       ytDlpArgs.push(
         "--extractor-args", 
         "youtube:player_client=android",
         "--user-agent", 
-        getRandomUserAgent(true)
+        getRandomUserAgent(true),
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--add-header", "sec-ch-ua:\"Chromium\";v=\"123\", \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"99\"",
+        "--add-header", "sec-ch-ua-mobile:?1",
+        "--add-header", "sec-ch-ua-platform:\"Android\""
       );
     } else if (platform === "TikTok") {
       // TikTok-specific options to ensure better download success
