@@ -11,6 +11,24 @@ const execAsync = promisify(exec);
 // Local map to store processes for cancelation
 const downloadProcesses = new Map();
 
+// Collection of mobile user agents for rotation
+const mobileUserAgents = [
+  'Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 11; Redmi Note 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/123.0.0.0 Mobile/15E148 Safari/604.1'
+];
+
+// Collection of desktop user agents for rotation
+const desktopUserAgents = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+];
+
 // Function to parse duration into a readable format
 function formatDuration(durationInSeconds: number): string {
   const hours = Math.floor(durationInSeconds / 3600);
@@ -40,6 +58,18 @@ function getPlatformFromUrl(url: string): string {
   return "Unknown";
 }
 
+// Get a random user agent from the list
+function getRandomUserAgent(mobile = false) {
+  const agents = mobile ? mobileUserAgents : desktopUserAgents;
+  return agents[Math.floor(Math.random() * agents.length)];
+}
+
+// Add a random delay to simulate human-like behavior
+async function randomDelay(min = 500, max = 1500) {
+  const delay = Math.floor(Math.random() * (max - min + 1) + min);
+  return new Promise(resolve => setTimeout(resolve, delay));
+}
+
 // Analyze URL and get available formats
 export async function analyzeUrl(url: string) {
   try {
@@ -49,57 +79,17 @@ export async function analyzeUrl(url: string) {
       fs.mkdirSync(downloadsDir, { recursive: true });
     }
 
-    // First, try with the standard approach
-    try {
-      // Run yt-dlp to get information about the video
-      // Add a user-agent to appear more like a browser request
-      const args = [
-        '--dump-json',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        url
-      ];
-      
-      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
-      const info = JSON.parse(stdout);
-      
-      return processVideoInfo(info, url);
-    } catch (firstError: any) {
-      console.error("First attempt error:", firstError);
+    // Determine platform for specialized handling
+    const platform = getPlatformFromUrl(url);
+    console.log(`Analyzing URL for platform: ${platform}`);
 
-      // If the error is due to YouTube bot protection, try an alternative approach
-      if (firstError.stderr && firstError.stderr.includes("Sign in to confirm you're not a bot")) {
-        console.log("Bot protection detected, trying alternative approach...");
-        
-        try {
-          // For YouTube specifically, try with additional arguments that might bypass the protection
-          if (url.includes("youtube.com") || url.includes("youtu.be")) {
-            const altArgs = [
-              '--dump-json',
-              '--no-check-certificates',
-              '--no-warnings',
-              '--extractor-args', 'youtube:player_client=android',
-              '--user-agent', 'Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36',
-              url
-            ];
-            
-            console.log("Trying with Android extractor args...");
-            const { stdout } = await execAsync(`yt-dlp ${altArgs.map(arg => `"${arg}"`).join(' ')}`);
-            const info = JSON.parse(stdout);
-            
-            return processVideoInfo(info, url);
-          }
-        } catch (secondError: any) {
-          console.error("Second attempt error:", secondError);
-          // If all attempts fail, throw the original error
-          throw firstError;
-        }
-      }
-      
-      // If it's not a bot protection error or the fallback failed, throw the original error
-      throw firstError;
-    }
+    // Try multiple approaches for YouTube videos
+    if (platform === "YouTube") {
+      return await analyzeYouTubeUrl(url);
+    } 
+    
+    // For other platforms, use standard approach
+    return await analyzeStandardUrl(url);
   } catch (error: any) {
     console.error('Error analyzing URL:', error);
     
@@ -135,6 +125,145 @@ export async function analyzeUrl(url: string) {
     // If no specific error pattern was matched, return a general error
     throw new Error(`Failed to analyze URL: ${error.message || 'Unknown error'}. Please verify the URL is correct and try again.`);
   }
+}
+
+// Function to handle non-YouTube URLs
+async function analyzeStandardUrl(url: string) {
+  console.log("Using standard approach for non-YouTube URL...");
+  
+  try {
+    // Add randomized delay to appear more human-like
+    await randomDelay(200, 800);
+    
+    // Determine if it's a mobile-focused platform
+    const isMobilePlatform = url.includes("tiktok.com") || url.includes("instagram.com");
+    const userAgent = getRandomUserAgent(isMobilePlatform);
+    
+    // Run yt-dlp to get information about the media
+    const args = [
+      '--dump-json',
+      '--no-check-certificates',
+      '--no-warnings',
+      '--user-agent', userAgent,
+      '--add-header', 'Accept-Language:en-US,en;q=0.9',
+      url
+    ];
+    
+    console.log(`Analyzing with standard approach and ${isMobilePlatform ? 'mobile' : 'desktop'} user agent...`);
+    const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+    const info = JSON.parse(stdout);
+    
+    return processVideoInfo(info, url);
+  } catch (error) {
+    console.error("Standard approach failed:", error);
+    throw error;
+  }
+}
+
+// Specialized function for YouTube URLs
+async function analyzeYouTubeUrl(url: string) {
+  // Try multiple approaches to bypass YouTube restrictions
+  const approaches = [
+    // 1. Try Android client approach (often works well)
+    async () => {
+      console.log("Trying Android client approach...");
+      await randomDelay(100, 500); // Short delay to seem more natural
+      
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android',
+        '--user-agent', getRandomUserAgent(true), // Mobile user agent
+        url
+      ];
+      
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    },
+    
+    // 2. Try iOS client approach
+    async () => {
+      console.log("Trying iOS client approach...");
+      await randomDelay(300, 800);
+      
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=ios',
+        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
+        url
+      ];
+      
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    },
+    
+    // 3. Try web client with tweaked headers
+    async () => {
+      console.log("Trying web client with custom headers...");
+      await randomDelay(200, 700);
+      
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--add-header', 'Origin:https://www.youtube.com',
+        '--add-header', 'Referer:https://www.youtube.com/',
+        '--user-agent', getRandomUserAgent(false),
+        url
+      ];
+      
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    },
+    
+    // 4. Try with alternative URL format (embed)
+    async () => {
+      console.log("Trying embed URL format...");
+      await randomDelay(300, 900);
+      
+      let videoId = "";
+      if (url.includes("youtube.com/watch?v=")) {
+        videoId = url.split("v=")[1].split("&")[0];
+      } else if (url.includes("youtu.be/")) {
+        videoId = url.split("youtu.be/")[1].split("?")[0];
+      }
+      
+      if (!videoId) throw new Error("Could not extract video ID");
+      
+      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--user-agent', getRandomUserAgent(false),
+        embedUrl
+      ];
+      
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    }
+  ];
+  
+  // Try each approach and return on first success
+  let lastError = null;
+  for (const approach of approaches) {
+    try {
+      const info = await approach();
+      return processVideoInfo(info, url);
+    } catch (error) {
+      console.error("Approach failed:", error);
+      lastError = error;
+      
+      // Wait a bit before trying the next approach
+      await randomDelay(500, 1500);
+    }
+  }
+  
+  // If all approaches failed, throw the last error
+  throw lastError;
 }
 
 // Helper function to process video information
@@ -211,7 +340,7 @@ function processVideoInfo(info: any, url: string) {
   };
 }
 
-// Download media file
+// Download media file with improved bot protection bypassing
 export function downloadMedia(
   url: string, 
   formatId: string, 
@@ -223,7 +352,10 @@ export function downloadMedia(
     const downloadsDir = path.join(process.cwd(), "downloads");
     const outputTemplate = path.join(downloadsDir, `%(title)s-${Date.now()}.%(ext)s`);
     
-    // Build the youtube-dl command with options to bypass bot protection
+    // Determine the platform for specialized handling
+    const platform = getPlatformFromUrl(url);
+    
+    // Build the yt-dlp command with options to bypass bot protection
     const ytDlpArgs = [
       "--newline",
       "--progress",
@@ -233,20 +365,40 @@ export function downloadMedia(
       "--no-warnings"
     ];
     
-    // Add extra parameters to try bypassing YouTube bot protection
-    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+    // Add platform-specific parameters
+    if (platform === "YouTube") {
+      // For YouTube, use mobile client approach which tends to work better
       ytDlpArgs.push(
         "--extractor-args", 
         "youtube:player_client=android",
         "--user-agent", 
-        "Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36"
+        getRandomUserAgent(true)
       );
-    } else {
-      // For other platforms, use a regular browser UA
+    } else if (platform === "TikTok" || platform === "Instagram") {
+      // For mobile-focused platforms, use a mobile user agent
       ytDlpArgs.push(
         "--user-agent", 
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        getRandomUserAgent(true)
       );
+    } else {
+      // For other platforms, use a regular browser user agent
+      ytDlpArgs.push(
+        "--user-agent", 
+        getRandomUserAgent(false)
+      );
+    }
+    
+    // Add referer headers for specific platforms
+    if (platform === "YouTube") {
+      ytDlpArgs.push("--referer", "https://www.youtube.com/");
+    } else if (platform === "Instagram") {
+      ytDlpArgs.push("--referer", "https://www.instagram.com/");
+    } else if (platform === "X") {
+      ytDlpArgs.push("--referer", "https://twitter.com/");
+    } else if (platform === "TikTok") {
+      ytDlpArgs.push("--referer", "https://www.tiktok.com/");
+    } else if (platform === "Facebook") {
+      ytDlpArgs.push("--referer", "https://www.facebook.com/");
     }
     
     // Add the URL last
