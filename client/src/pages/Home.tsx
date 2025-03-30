@@ -117,6 +117,29 @@ export default function Home() {
               if (data.progress >= 100) {
                 eventSource.close();
                 setIsDownloading(false);
+                
+                // Get the file URL and trigger download
+                fetch(`/api/download/file/${data.downloadId || ''}`)
+                  .then(res => res.json())
+                  .then(fileData => {
+                    if (fileData.success && fileData.fileUrl) {
+                      // Create a temporary link element and trigger download
+                      const downloadLink = document.createElement('a');
+                      downloadLink.href = fileData.fileUrl;
+                      downloadLink.download = fileData.filename || 'download';
+                      document.body.appendChild(downloadLink);
+                      downloadLink.click();
+                      document.body.removeChild(downloadLink);
+                      
+                      console.log("File download triggered:", fileData.fileUrl);
+                    } else {
+                      console.error("Could not get file URL:", fileData.message || "Unknown error");
+                    }
+                  })
+                  .catch(err => {
+                    console.error("Error getting file URL:", err);
+                  });
+                
                 resolve({ success: true, message: "Download complete" });
               }
             } catch (err) {
