@@ -327,15 +327,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/download/progress", (req: Request, res: Response) => {
     try {
       const downloadId = req.session?.downloadId;
+      console.log(`Checking download progress for ID: ${downloadId}`);
       
+      // If there's no download ID in the session, create a placeholder response
       if (!downloadId) {
-        res.status(404).json({ message: "No download session found", error: true });
+        console.log("No download session found");
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        
+        // Send a friendly error message through SSE
+        res.write(`data: ${JSON.stringify({
+          error: true,
+          message: "No active download session found. Please start a new download.",
+          progress: 0
+        })}\n\n`);
+        
+        // End the connection after a brief delay
+        setTimeout(() => res.end(), 1000);
         return;
       }
       
-      if (!activeDownloads.has(downloadId)) {
-        res.status(404).json({ message: "No active download found", error: true });
-        return;
+      // For TikTok downloads, we need to give more time for the process to initialize
+      // as they often complete very quickly or have a delayed start
+      const downloadInfo = activeDownloads.get(downloadId);
+      
+      // If the download doesn't exist in our map yet or completed quickly,
+      // create a placeholder download to show progress
+      if (!downloadInfo) {
+        console.log(`No active download found for ID: ${downloadId}`);
+        
+        // Check if download might have completed quickly
+        const downloadsDir = path.join(process.cwd(), "downloads");
+        const files = fs.readdirSync(downloadsDir);
+        
+        // Look for recently created files in the last 30 seconds
+        const recentFiles = files.filter(file => {
+          const filePath = path.join(downloadsDir, file);
+          const stats = fs.statSync(filePath);
+          return (Date.now() - stats.birthtime.getTime()) < 30000; // Less than 30 seconds old
+        });
+        
+        if (recentFiles.length > 0) {
+          // Sort by newest first
+          recentFiles.sort((a, b) => {
+            const statsA = fs.statSync(path.join(downloadsDir, a));
+            const statsB = fs.statSync(path.join(downloadsDir, b));
+            return statsB.birthtime.getTime() - statsA.birthtime.getTime();
+          });
+          
+          // Create a completed download entry
+          activeDownloads.set(downloadId, {
+            progress: 100,
+            filename: recentFiles[0],
+            totalSize: fs.statSync(path.join(downloadsDir, recentFiles[0])).size,
+            downloadedSize: fs.statSync(path.join(downloadsDir, recentFiles[0])).size,
+            remainingTime: "Complete",
+            success: true,
+            completed: true,
+            message: "Download completed successfully"
+          });
+          
+          console.log(`Created completed download entry for ${recentFiles[0]}`);
+        } else {
+          // Create a placeholder for a non-existent or failed download
+          activeDownloads.set(downloadId, {
+            error: true,
+            message: "Download may have failed or been cancelled. Please try again.",
+            progress: 0
+          });
+          
+          console.log(`Created placeholder for failed download`);
+        }
       }
       
       // Setup SSE connection
@@ -370,11 +433,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return;
             }
             
-            // Send normal progress update
-            res.write(`data: ${JSON.stringify(progress)}\n\n`);
-            
-            // If download is complete, clean up the interval
-            if (progress.progress >= 100) {
+            // Check if download completed quickly (TikTok often does)
+            if (progress.completed || progress.progress >= 100) {
+              res.write(`data: ${JSON.stringify({
+                ...progress,
+                progress: 100,
+                remainingTime: "Complete",
+                success: true
+              })}\n\n`);
+              
+              // Clean up the interval since download is complete
               clearInterval(progressInterval);
               setTimeout(() => {
                 try {
@@ -383,7 +451,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   console.error("Error ending response stream:", err);
                 }
               }, 1000);
+              
+              return;
             }
+            
+            // Send normal progress update
+            res.write(`data: ${JSON.stringify(progress)}\n\n`);
+          } else {
+            // The download has disappeared from our map - it may have completed or errored
+            // but we lost tracking. Indicate this to the client.
+            res.write(`data: ${JSON.stringify({
+              error: true,
+              message: "Download tracking was lost. The download may have completed or failed.",
+              progress: 0
+            })}\n\n`);
+            
+            clearInterval(progressInterval);
+            setTimeout(() => {
+              try {
+                res.end();
+              } catch (err) {
+                console.error("Error ending response stream:", err);
+              }
+            }, 1000);
           }
         } catch (err) {
           console.error("Error sending progress:", err);

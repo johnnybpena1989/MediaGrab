@@ -562,9 +562,76 @@ export function downloadMedia(
     let totalBytes = 0;
     let filename = '';
     let eta = '';
+    let lastUpdateTime = Date.now();
+    
+    // For TikTok and other short-form video platforms, 
+    // we might need to handle fast downloads differently
+    const isTikTok = url.includes("tiktok.com");
+    const isShortFormVideo = isTikTok || url.includes("instagram.com/reels");
+    
+    // Initialize progress object if it doesn't exist yet
+    // This ensures we have something to show even if progress events are delayed
+    if (!activeDownloads.has(downloadId)) {
+      const initialMessage = isShortFormVideo ? 
+        'Starting short video download (these typically complete quickly)...' : 
+        'Initializing download...';
+        
+      activeDownloads.set(downloadId, {
+        progress: 0,
+        filename: initialMessage,
+        totalSize: 0,
+        downloadedSize: 0,
+        remainingTime: 'Calculating...',
+        startTime: Date.now(),
+        platform: getPlatformFromUrl(url)
+      });
+    }
+    
+    // Create an interval for progress updates to handle cases where yt-dlp doesn't provide them
+    // This is especially important for short videos that download quickly
+    const progressUpdateInterval = setInterval(() => {
+      // Only update if we haven't received a progress update in 2 seconds
+      if (Date.now() - lastUpdateTime > 2000) {
+        const currentProgress = activeDownloads.get(downloadId);
+        
+        if (currentProgress && !currentProgress.completed && !currentProgress.error) {
+          // Simulate progress for short videos that complete quickly
+          if (isShortFormVideo) {
+            // Calculate elapsed time since download started
+            const elapsedTime = (Date.now() - (currentProgress.startTime || Date.now())) / 1000; // in seconds
+            
+            // For short videos, assume they download quickly (10-15 seconds total)
+            // Create a simulated progress based on elapsed time
+            const estimatedTotalTime = isTikTok ? 10 : 15; // TikTok videos are usually smaller
+            const simulatedProgress = Math.min(95, (elapsedTime / estimatedTotalTime) * 100);
+            
+            // Only update if our simulation is ahead of the real progress
+            if (simulatedProgress > (currentProgress.progress || 0)) {
+              currentProgress.progress = simulatedProgress;
+              currentProgress.remainingTime = `~${Math.max(1, Math.floor(estimatedTotalTime - elapsedTime))}s`;
+              currentProgress.estimatedTime = `${Math.floor(elapsedTime)}s elapsed`;
+              activeDownloads.set(downloadId, currentProgress);
+            }
+          } else {
+            // For regular videos, just update the elapsed time if we're stuck
+            const elapsedTime = (Date.now() - (currentProgress.startTime || Date.now())) / 1000;
+            currentProgress.estimatedTime = `${Math.floor(elapsedTime)}s elapsed`;
+            activeDownloads.set(downloadId, currentProgress);
+          }
+        }
+      }
+    }, 1000);
     
     downloadProcess.stdout.on("data", (data) => {
       const output = data.toString();
+      lastUpdateTime = Date.now();
+      
+      // Check for download completion messages outside the [download] lines
+      if (output.includes('has already been downloaded') || 
+          output.includes('Destination:') ||
+          output.includes('Merging formats')) {
+        console.log(`Download progress detected: ${output.trim()}`);
+      }
       
       // Parse progress information
       if (output.includes('[download]')) {
@@ -577,6 +644,7 @@ export function downloadMedia(
           if (processInfo) {
             processInfo.filePath = filePath;
           }
+          console.log(`Destination found: ${filename}`);
         }
         
         // Extract progress percentage
@@ -611,13 +679,15 @@ export function downloadMedia(
           }
           
           // Update progress tracking in the shared map from routes.ts
+          const existingProgress = activeDownloads.get(downloadId) || {};
           activeDownloads.set(downloadId, {
+            ...existingProgress,
             progress: progressPercent,
-            filename: filename || 'Downloading...',
-            totalSize: totalBytes,
-            downloadedSize: downloadedBytes,
-            remainingTime: eta || 'Calculating...',
-            process: downloadProcess
+            filename: filename || existingProgress.filename || 'Downloading...',
+            totalSize: totalBytes || existingProgress.totalSize || 0,
+            downloadedSize: downloadedBytes || existingProgress.downloadedSize || 0,
+            remainingTime: eta || existingProgress.remainingTime || 'Calculating...',
+            lastUpdate: Date.now()
           });
         }
       }
@@ -672,25 +742,68 @@ export function downloadMedia(
     });
     
     downloadProcess.on("close", (code) => {
-      activeDownloads.delete(downloadId);
+      // Clean up the progress update interval
+      clearInterval(progressUpdateInterval);
+      
+      // Don't delete from activeDownloads yet - keep it for a short time
+      // so the frontend can display the final status
+      const progressInfo = activeDownloads.get(downloadId);
       
       if (code === 0) {
+        // Update active downloads with success information
+        if (progressInfo) {
+          progressInfo.progress = 100;
+          progressInfo.completed = true;
+          progressInfo.success = true;
+          progressInfo.remainingTime = "Complete";
+          progressInfo.completedAt = Date.now();
+          
+          if (progressInfo.startTime) {
+            const downloadTime = (Date.now() - progressInfo.startTime) / 1000; // in seconds
+            progressInfo.downloadDuration = `${Math.floor(downloadTime)}s`;
+          }
+          
+          activeDownloads.set(downloadId, progressInfo);
+          
+          // Clean up download info after a short delay
+          setTimeout(() => {
+            activeDownloads.delete(downloadId);
+          }, 30000); // Keep for 30 seconds to allow frontend to update
+        }
+        
         callback(null, filePath);
       } else {
         // Check the stderr buffer for known error patterns
+        let errorMessage = `Download failed with exit code ${code}. Please try a different video or format.`;
+        
         if (stderrBuffer.includes("Sign in to confirm you're not a bot")) {
-          callback(new Error('YouTube bot protection triggered. Please try a different URL or try again later.'));
+          errorMessage = 'YouTube bot protection triggered. Please try a different URL or try again later.';
         } else if (stderrBuffer.includes("is not available in your country")) {
-          callback(new Error('This content is not available in your region due to restrictions.'));
+          errorMessage = 'This content is not available in your region due to restrictions.';
         } else if (stderrBuffer.includes("Private video")) {
-          callback(new Error('This video is private and cannot be accessed.'));
+          errorMessage = 'This video is private and cannot be accessed.';
         } else if (stderrBuffer.includes("age-restricted")) {
-          callback(new Error('This content is age-restricted and cannot be downloaded.'));
+          errorMessage = 'This content is age-restricted and cannot be downloaded.';
         } else if (stderrBuffer.includes("This video is unavailable")) {
-          callback(new Error('This video is unavailable or has been removed.'));
-        } else {
-          callback(new Error(`Download failed with exit code ${code}. Please try a different video or format.`));
+          errorMessage = 'This video is unavailable or has been removed.';
         }
+        
+        // Update active downloads with error information
+        if (progressInfo) {
+          progressInfo.error = true;
+          progressInfo.message = errorMessage;
+          progressInfo.completed = true;
+          progressInfo.success = false;
+          progressInfo.errorTime = Date.now();
+          activeDownloads.set(downloadId, progressInfo);
+          
+          // Clean up download info after a short delay
+          setTimeout(() => {
+            activeDownloads.delete(downloadId);
+          }, 30000); // Keep for 30 seconds to allow frontend to update
+        }
+        
+        callback(new Error(errorMessage));
       }
     });
     
