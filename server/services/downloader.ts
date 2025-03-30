@@ -131,33 +131,138 @@ export async function analyzeUrl(url: string) {
 async function analyzeStandardUrl(url: string) {
   console.log("Using standard approach for non-YouTube URL...");
   
+  // Determine platform for platform-specific handling
+  const platform = getPlatformFromUrl(url);
+  
   try {
     // Add randomized delay to appear more human-like
     await randomDelay(200, 800);
     
-    // Determine if it's a mobile-focused platform
-    const isMobilePlatform = url.includes("tiktok.com") || url.includes("instagram.com");
-    const userAgent = getRandomUserAgent(isMobilePlatform);
+    // Platform-specific handling
+    if (platform === "TikTok") {
+      return await analyzeTikTokUrl(url);
+    } else if (platform === "Instagram") {
+      return await analyzeInstagramUrl(url);
+    } else {
+      // Generic approach for other platforms
+      return await analyzeGenericUrl(url);
+    }
+  } catch (error) {
+    console.error("Standard approach failed:", error);
+    throw error;
+  }
+}
+
+// Specialized function for TikTok URLs
+async function analyzeTikTokUrl(url: string) {
+  console.log("Using TikTok-specific approach...");
+  
+  try {
+    // TikTok prefers mobile user agents
+    const userAgent = getRandomUserAgent(true);
     
-    // Run yt-dlp to get information about the media
+    // First try using the mobile API endpoint
+    const args = [
+      '--dump-json',
+      '--no-check-certificates',
+      '--no-warnings',
+      '--extractor-args', 'tiktok:api_hostname=m.tiktok.com',
+      '--user-agent', userAgent,
+      '--add-header', 'Accept-Language:en-US,en;q=0.9',
+      '--add-header', 'sec-ch-ua-mobile:?1',
+      '--add-header', 'sec-ch-ua-platform:"Android"',
+      '--referer', 'https://www.tiktok.com/',
+      url
+    ];
+    
+    console.log("Trying TikTok mobile API approach...");
+    const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+    const info = JSON.parse(stdout);
+    
+    return processVideoInfo(info, url);
+  } catch (firstError) {
+    console.error("TikTok mobile approach failed:", firstError);
+    
+    try {
+      // Fallback to normal approach
+      await randomDelay(500, 1000);
+      const userAgent = getRandomUserAgent(true);
+      
+      const args = [
+        '--dump-json',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--user-agent', userAgent,
+        '--referer', 'https://www.tiktok.com/',
+        url
+      ];
+      
+      console.log("Trying TikTok fallback approach...");
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      const info = JSON.parse(stdout);
+      
+      return processVideoInfo(info, url);
+    } catch (secondError) {
+      console.error("TikTok fallback approach failed:", secondError);
+      throw secondError;
+    }
+  }
+}
+
+// Specialized function for Instagram URLs
+async function analyzeInstagramUrl(url: string) {
+  console.log("Using Instagram-specific approach...");
+  
+  try {
+    // Instagram prefers mobile user agents
+    const userAgent = getRandomUserAgent(true);
+    
     const args = [
       '--dump-json',
       '--no-check-certificates',
       '--no-warnings',
       '--user-agent', userAgent,
       '--add-header', 'Accept-Language:en-US,en;q=0.9',
+      '--add-header', 'sec-ch-ua-mobile:?1',
+      '--add-header', 'sec-ch-ua-platform:"Android"',
+      '--referer', 'https://www.instagram.com/',
       url
     ];
     
-    console.log(`Analyzing with standard approach and ${isMobilePlatform ? 'mobile' : 'desktop'} user agent...`);
+    console.log("Analyzing Instagram URL...");
     const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
     const info = JSON.parse(stdout);
     
     return processVideoInfo(info, url);
   } catch (error) {
-    console.error("Standard approach failed:", error);
+    console.error("Instagram approach failed:", error);
     throw error;
   }
+}
+
+// Generic approach for other platforms
+async function analyzeGenericUrl(url: string) {
+  console.log("Using generic approach for URL...");
+  
+  // Determine if it's a mobile-focused platform
+  const isMobilePlatform = url.includes("tiktok.com") || url.includes("instagram.com");
+  const userAgent = getRandomUserAgent(isMobilePlatform);
+  
+  // Run yt-dlp to get information about the media
+  const args = [
+    '--dump-json',
+    '--no-check-certificates',
+    '--no-warnings',
+    '--user-agent', userAgent,
+    '--add-header', 'Accept-Language:en-US,en;q=0.9',
+    url
+  ];
+  
+  console.log(`Analyzing with generic approach and ${isMobilePlatform ? 'mobile' : 'desktop'} user agent...`);
+  const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+  const info = JSON.parse(stdout);
+  
+  return processVideoInfo(info, url);
 }
 
 // Specialized function for YouTube URLs
@@ -374,17 +479,49 @@ export function downloadMedia(
         "--user-agent", 
         getRandomUserAgent(true)
       );
-    } else if (platform === "TikTok" || platform === "Instagram") {
-      // For mobile-focused platforms, use a mobile user agent
+    } else if (platform === "TikTok") {
+      // TikTok-specific options to ensure better download success
       ytDlpArgs.push(
         "--user-agent", 
-        getRandomUserAgent(true)
+        getRandomUserAgent(true),
+        "--extractor-args",
+        "tiktok:api_hostname=m.tiktok.com",
+        "--no-check-formats", // Don't verify formats before downloading
+        "--force-overwrites"  // Overwrite if file exists
+      );
+    } else if (platform === "Instagram") {
+      // Instagram-specific options
+      ytDlpArgs.push(
+        "--user-agent", 
+        getRandomUserAgent(true),
+        "--add-header",
+        "Cookie:sessionid=none", // Use a placeholder sessionid
+        "--no-check-formats"
+      );
+    } else if (platform === "X") {
+      // X/Twitter-specific options
+      ytDlpArgs.push(
+        "--user-agent", 
+        getRandomUserAgent(false),
+        "--no-check-formats",
+        "--extractor-args",
+        "twitter:api=m"  // Use mobile API which often works better
+      );
+    } else if (platform === "Facebook") {
+      // Facebook-specific options
+      ytDlpArgs.push(
+        "--user-agent", 
+        getRandomUserAgent(false),
+        "--no-check-formats",
+        "--add-header", 
+        "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       );
     } else {
       // For other platforms, use a regular browser user agent
       ytDlpArgs.push(
         "--user-agent", 
-        getRandomUserAgent(false)
+        getRandomUserAgent(false),
+        "--no-check-formats"
       );
     }
     
@@ -397,6 +534,13 @@ export function downloadMedia(
       ytDlpArgs.push("--referer", "https://twitter.com/");
     } else if (platform === "TikTok") {
       ytDlpArgs.push("--referer", "https://www.tiktok.com/");
+      // Add additional TikTok headers to appear more like a browser
+      ytDlpArgs.push(
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--add-header", "sec-ch-ua:\"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"99\"",
+        "--add-header", "sec-ch-ua-mobile:?1",
+        "--add-header", "sec-ch-ua-platform:\"Android\""
+      );
     } else if (platform === "Facebook") {
       ytDlpArgs.push("--referer", "https://www.facebook.com/");
     }
