@@ -640,10 +640,22 @@ export function downloadMedia(
         if (filenameMatch && filenameMatch[1]) {
           filename = path.basename(filenameMatch[1]);
           filePath = filenameMatch[1];
+          
+          // Update file path in the download process record
           const processInfo = downloadProcesses.get(downloadId);
           if (processInfo) {
             processInfo.filePath = filePath;
+            downloadProcesses.set(downloadId, processInfo);
           }
+          
+          // Also update the file path in the activeDownloads map for direct download
+          const progressInfo = activeDownloads.get(downloadId);
+          if (progressInfo) {
+            progressInfo.filePath = filePath;
+            progressInfo.filename = filename;
+            activeDownloads.set(downloadId, progressInfo);
+          }
+          
           console.log(`Destination found: ${filename}`);
         }
         

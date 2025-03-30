@@ -118,27 +118,11 @@ export default function Home() {
                 eventSource.close();
                 setIsDownloading(false);
                 
-                // Get the file URL and trigger download
-                fetch(`/api/download/file/${data.downloadId || ''}`)
-                  .then(res => res.json())
-                  .then(fileData => {
-                    if (fileData.success && fileData.fileUrl) {
-                      // Create a temporary link element and trigger download
-                      const downloadLink = document.createElement('a');
-                      downloadLink.href = fileData.fileUrl;
-                      downloadLink.download = fileData.filename || 'download';
-                      document.body.appendChild(downloadLink);
-                      downloadLink.click();
-                      document.body.removeChild(downloadLink);
-                      
-                      console.log("File download triggered:", fileData.fileUrl);
-                    } else {
-                      console.error("Could not get file URL:", fileData.message || "Unknown error");
-                    }
-                  })
-                  .catch(err => {
-                    console.error("Error getting file URL:", err);
-                  });
+                // Trigger automatic file download by redirecting to the file endpoint
+                // This will download the file directly to the user's device
+                window.location.href = `/api/download/file/${data.downloadId || ''}`;
+                
+                console.log("Initiating direct file download for:", data.downloadId);
                 
                 resolve({ success: true, message: "Download complete" });
               }

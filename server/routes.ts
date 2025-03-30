@@ -533,47 +533,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve static files from downloads directory
   app.use("/downloads", express.static(downloadsDir));
   
-  // Endpoint to get download file information after completion
+  // Direct file download endpoint - sends the file directly to the user
   app.get("/api/download/file/:downloadId", (req: Request, res: Response) => {
     try {
       const { downloadId } = req.params;
       
-      // For auto-download to work properly, we're allowing access without strict session checks
-      // The URL is still protected with a unique download ID
-      
       // Get download information
       const downloadInfo = activeDownloads.get(downloadId);
       
-      if (!downloadInfo) {
-        // Check if there might be a recently completed download
-        const downloadsDir = path.join(process.cwd(), "downloads");
-        const files = fs.readdirSync(downloadsDir);
-        
-        // Sort by newest first
-        const recentFiles = files.sort((a, b) => {
-          const statsA = fs.statSync(path.join(downloadsDir, a));
-          const statsB = fs.statSync(path.join(downloadsDir, b));
-          return statsB.birthtimeMs - statsA.birthtimeMs;
-        });
-        
-        if (recentFiles.length > 0) {
-          // Send the most recent file info
-          const mostRecentFile = recentFiles[0];
-          const filePath = path.join(downloadsDir, mostRecentFile);
-          const stats = fs.statSync(filePath);
-          
-          return res.json({
-            success: true,
-            filename: mostRecentFile,
-            fileUrl: `/downloads/${encodeURIComponent(mostRecentFile)}`,
-            size: stats.size,
-            dateCreated: stats.birthtime
-          });
-        }
-        
+      if (!downloadInfo || !downloadInfo.filePath) {
         return res.status(404).json({
           success: false,
-          message: "Download not found or has already been cleaned up."
+          message: "Download not found or file path unavailable."
         });
       }
       
@@ -597,75 +568,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // If download completed successfully
-      let fileUrl = "";
-      let fileName = downloadInfo.filename;
-      let fileSize = downloadInfo.totalSize || 0;
-      
-      // If we have specific file info from the download
-      if (downloadInfo.filePath) {
-        fileName = path.basename(downloadInfo.filePath);
-        fileUrl = `/downloads/${encodeURIComponent(fileName)}`;
+      if (downloadInfo.filePath && fs.existsSync(downloadInfo.filePath)) {
+        const filename = path.basename(downloadInfo.filePath);
         
-        // Get file stats if possible
-        try {
-          const stats = fs.statSync(downloadInfo.filePath);
-          fileSize = stats.size;
-        } catch (err) {
-          console.error(`Could not get stats for ${downloadInfo.filePath}:`, err);
-        }
-      } else if (fileName) {
-        // If we just have a filename
-        fileUrl = `/downloads/${encodeURIComponent(fileName)}`;
-      } else {
-        // If we don't have any specific file info, check for recent files
-        const recentFiles = fs.readdirSync(downloadsDir)
-          .filter(file => {
-            try {
-              const stats = fs.statSync(path.join(downloadsDir, file));
-              return (Date.now() - stats.birthtimeMs) < 60000; // Created in the last minute
-            } catch (err) {
-              return false;
-            }
-          })
-          .sort((a, b) => {
-            const statsA = fs.statSync(path.join(downloadsDir, a));
-            const statsB = fs.statSync(path.join(downloadsDir, b));
-            return statsB.birthtimeMs - statsA.birthtimeMs;
-          });
+        // Set headers for browser to download the file
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('Content-Type', 'application/octet-stream');
         
-        if (recentFiles.length > 0) {
-          fileName = recentFiles[0];
-          fileUrl = `/downloads/${encodeURIComponent(fileName)}`;
-          
-          // Get file stats
-          try {
-            const stats = fs.statSync(path.join(downloadsDir, fileName));
-            fileSize = stats.size;
-          } catch (err) {
-            console.error(`Could not get stats for ${fileName}:`, err);
+        // Stream the file to the client
+        const fileStream = fs.createReadStream(downloadInfo.filePath);
+        fileStream.pipe(res);
+        
+        // Handle errors
+        fileStream.on('error', (err) => {
+          console.error('Error streaming file:', err);
+          if (!res.headersSent) {
+            res.status(500).json({
+              success: false,
+              message: "Error streaming file to client."
+            });
           }
-        } else {
-          return res.status(404).json({
-            success: false,
-            message: "Download file not found."
-          });
-        }
+        });
+        
+        // When download is complete, schedule the file for deletion
+        fileStream.on('close', () => {
+          // Delete the file after a short delay to ensure it's fully sent
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(downloadInfo.filePath)) {
+                fs.unlinkSync(downloadInfo.filePath);
+                console.log(`Deleted file: ${downloadInfo.filePath}`);
+              }
+            } catch (err) {
+              console.error('Error deleting file:', err);
+            }
+          }, 5000);
+        });
+        
+        return;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: "File not found on server."
+        });
       }
-      
-      // Return download information
-      return res.json({
-        success: true,
-        status: "completed",
-        filename: fileName,
-        fileUrl: fileUrl,
-        size: fileSize,
-        downloadTime: downloadInfo.downloadDuration
-      });
     } catch (error) {
-      console.error("Error retrieving download file info:", error);
+      console.error("Error retrieving download file:", error);
       return res.status(500).json({
         success: false,
-        message: "Failed to retrieve download information."
+        message: "Failed to retrieve download file."
       });
     }
   });
