@@ -4,7 +4,6 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { urlAnalyzeSchema, downloadRequestSchema } from "@shared/schema";
 import { analyzeUrl, downloadMedia, cancelDownload, getDownloadProgress } from "./services/downloader";
-import { initializeEmailService, sendEmail } from "./services/emailService";
 import path from "path";
 import fs from "fs";
 import "express-session";
@@ -535,62 +534,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/downloads", express.static(downloadsDir));
   
   // Direct file download endpoint - sends the file directly to the user
-  // Handle contact form submissions
-  app.post("/api/contact", async (req: Request, res: Response) => {
-    try {
-      const { name, email, subject, message } = req.body;
-      
-      // Basic validation
-      if (!name || !email || !subject || !message) {
-        return res.status(400).json({
-          success: false,
-          message: "All fields are required"
-        });
-      }
-      
-      // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({
-          success: false,
-          message: "Please provide a valid email address"
-        });
-      }
-      
-      // Initialize email service if not already done
-      await initializeEmailService();
-      
-      // Send the email
-      const result = await sendEmail({
-        name,
-        email,
-        subject,
-        message
-      });
-      
-      if (result.success) {
-        return res.status(200).json({
-          success: true,
-          message: "Your message has been sent successfully",
-          messageId: result.messageId,
-          previewUrl: result.previewUrl // Only available in development
-        });
-      } else {
-        console.error("Failed to send email:", result.error);
-        return res.status(500).json({
-          success: false,
-          message: "Failed to send your message. Please try again later."
-        });
-      }
-    } catch (error) {
-      console.error("Error in contact endpoint:", error);
-      return res.status(500).json({
-        success: false,
-        message: "An unexpected error occurred. Please try again later."
-      });
-    }
-  });
-
   app.get("/api/download/file/:downloadId", (req: Request, res: Response) => {
     try {
       const { downloadId } = req.params;
