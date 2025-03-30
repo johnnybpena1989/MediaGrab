@@ -1,8 +1,40 @@
 @echo off
-echo ===================================
-echo   Media Downloader - Setup Script
-echo ===================================
+setlocal enabledelayedexpansion
+
+echo ========================================================
+echo      Media Downloader - One-Click Installation Script
+echo ========================================================
 echo.
+
+:: Set up the installation directory 
+set APP_NAME=MediaDownloader
+set INSTALL_DIR=%USERPROFILE%\%APP_NAME%
+
+:: If the script is already running from the installation directory, use the current directory
+if "%CD%"=="%INSTALL_DIR%" (
+    set INSTALL_DIR=%CD%
+    set ALREADY_INSTALLED=true
+) else (
+    set ALREADY_INSTALLED=false
+)
+
+:: Create the isolated installation environment if not already there
+if "%ALREADY_INSTALLED%"=="false" (
+    echo Creating isolated environment at: %INSTALL_DIR%
+    
+    if not exist "%INSTALL_DIR%" (
+        mkdir "%INSTALL_DIR%"
+    )
+    
+    :: Copy all project files to the installation directory if not already there
+    if not exist "%INSTALL_DIR%\package.json" (
+        echo Copying application files to isolated environment...
+        xcopy /E /I /Y "%CD%\*" "%INSTALL_DIR%\"
+    )
+    
+    :: Change to the installation directory
+    cd /d "%INSTALL_DIR%"
+)
 
 :: Check if Node.js is installed
 where node >nul 2>nul
@@ -29,7 +61,7 @@ if %NODE_MAJOR% LSS 16 (
     echo The application might not work correctly.
     echo.
     choice /C YN /M "Do you want to continue anyway?"
-    if %errorlevel% equ 2 exit /b 1
+    if !errorlevel! equ 2 exit /b 1
     echo.
 )
 
@@ -39,53 +71,80 @@ if not exist "downloads" (
     mkdir downloads
 )
 
-:: Install dependencies
-echo Installing Node.js dependencies...
-call npm install
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to install Node.js dependencies.
-    pause
-    exit /b 1
+:: Set up log directory
+if not exist "logs" (
+    mkdir logs
+)
+
+:: Install dependencies (only if node_modules doesn't exist or package.json has changed)
+if not exist "node_modules" (
+    echo Installing Node.js dependencies...
+    call npm install
+    if !errorlevel! neq 0 (
+        echo ERROR: Failed to install Node.js dependencies.
+        echo Check logs\npm_error.log for details.
+        call npm install > logs\npm_error.log 2>&1
+        pause
+        exit /b 1
+    )
+) else (
+    echo Node modules already installed.
 )
 
 :: Check if yt-dlp is already installed
+echo Checking yt-dlp installation...
 where yt-dlp >nul 2>nul
-if %errorlevel% neq 0 (
+if !errorlevel! neq 0 (
     echo yt-dlp not found, downloading it now...
     
-    :: Create a temp directory for downloads
-    if not exist ".tmp" mkdir .tmp
+    :: Create a bin directory for executables
+    if not exist "bin" mkdir bin
     
     :: Download yt-dlp.exe
-    powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile '.tmp\yt-dlp.exe'}"
+    echo Downloading yt-dlp.exe...
+    powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile 'bin\yt-dlp.exe'}" > logs\ytdlp_download.log 2>&1
     
-    if not exist ".tmp\yt-dlp.exe" (
-        echo ERROR: Failed to download yt-dlp.exe
+    if not exist "bin\yt-dlp.exe" (
+        echo ERROR: Failed to download yt-dlp.exe.
+        echo Check logs\ytdlp_download.log for details.
         pause
         exit /b 1
     )
     
     :: Create a batch file in the PATH to run yt-dlp.exe
-    echo Creating yt-dlp batch file...
-    set YT_DLP_BAT=yt-dlp.bat
-    
-    echo @echo off > %YT_DLP_BAT%
-    echo "%CD%\.tmp\yt-dlp.exe" %%* >> %YT_DLP_BAT%
+    echo @echo off > yt-dlp.bat
+    echo "%INSTALL_DIR%\bin\yt-dlp.exe" %%* >> yt-dlp.bat
     
     echo yt-dlp is now installed locally.
 ) else (
     echo yt-dlp is already installed.
 )
 
+:: Create a shortcut on the desktop if not there already
+if "%ALREADY_INSTALLED%"=="false" (
+    echo Creating a desktop shortcut...
+    
+    powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%USERPROFILE%\Desktop\Media Downloader.lnk'); $Shortcut.TargetPath = '%INSTALL_DIR%\run_app.bat'; $Shortcut.WorkingDirectory = '%INSTALL_DIR%'; $Shortcut.IconLocation = 'shell32.dll,44'; $Shortcut.Save()}"
+    
+    :: Copy this script to the installation directory if not already there
+    if not exist "%INSTALL_DIR%\run_app.bat" (
+        copy "%~f0" "%INSTALL_DIR%\run_app.bat" > nul
+    )
+)
+
 :: Start the application
 echo.
 echo Starting the Media Downloader application...
+echo Environment: %INSTALL_DIR%
 echo.
 call npm run dev
 
 :: Keep the window open on error
-if %errorlevel% neq 0 (
+if !errorlevel! neq 0 (
     echo.
-    echo ERROR: Application exited with code %errorlevel%
+    echo ERROR: Application exited with code !errorlevel!
+    echo Check logs directory for details.
     pause
 )
+
+endlocal
