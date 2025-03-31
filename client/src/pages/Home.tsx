@@ -192,7 +192,7 @@ export default function Home() {
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-[#FF0000]/90 to-[#405DE6]/90 text-white py-12 md:py-16">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Download Videos & Audio</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Download Videos</h2>
             <p className="text-lg max-w-2xl mx-auto">
               Save content from YouTube, Instagram, X, Facebook, and TikTok directly to your device
             </p>

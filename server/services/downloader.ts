@@ -375,7 +375,6 @@ async function analyzeYouTubeUrl(url: string) {
 function processVideoInfo(info: any, url: string) {
   // Extract video formats
   const videoFormats: any[] = [];
-  const audioFormats: any[] = [];
   
   // Parse formats
   if (info.formats) {
@@ -400,35 +399,17 @@ function processVideoInfo(info: any, url: string) {
             type: 'video'
           });
         }
-      } else if (format.acodec !== 'none' && format.vcodec === 'none') {
-        // This is an audio-only format
-        audioFormats.push({
-          formatId: format.format_id,
-          quality: format.abr ? `${format.abr}kbps` : 'Unknown',
-          bitrate: format.abr ? `${format.abr}kbps` : undefined,
-          filesize: format.filesize || 0,
-          extension: format.ext || 'mp3',
-          type: 'audio'
-        });
       }
+      // We no longer process audio-only formats
     });
   }
   
-  // Sort formats by quality (highest first for video, highest first for audio)
+  // Sort formats by quality (highest first for video)
   videoFormats.sort((a, b) => {
     if (isVideoFormat(a) && isVideoFormat(b)) {
       const heightA = parseInt((a.resolution || '0').replace('p', ''));
       const heightB = parseInt((b.resolution || '0').replace('p', ''));
       return heightB - heightA;
-    }
-    return 0;
-  });
-  
-  audioFormats.sort((a, b) => {
-    if (isAudioFormat(a) && isAudioFormat(b)) {
-      const bitrateA = parseInt((a.bitrate || '0').replace('kbps', ''));
-      const bitrateB = parseInt((b.bitrate || '0').replace('kbps', ''));
-      return bitrateB - bitrateA;
     }
     return 0;
   });
@@ -440,7 +421,7 @@ function processVideoInfo(info: any, url: string) {
     platform: getPlatformFromUrl(url),
     formats: {
       video: videoFormats,
-      audio: audioFormats
+      audio: [] // Empty array for audio formats as we're no longer supporting audio downloads
     }
   };
 }
