@@ -6,10 +6,17 @@ echo "    Media Downloader - Raspberry Pi Startup Script"
 echo "========================================================="
 echo ""
 
+# Default port - can be overridden by passing a parameter: ./run_app.sh 8080
+DEFAULT_PORT=3000
+PORT=${1:-$DEFAULT_PORT}
+
 # Set up environment variables
 export LOCAL_ENV=true
 export NODE_ENV=development
 export PI_ENV=true
+export PORT=$PORT
+
+echo "Using port: $PORT"
 
 # Create necessary directories
 mkdir -p downloads
@@ -87,7 +94,7 @@ LOCAL_IP=$(hostname -I | cut -d' ' -f1)
 
 echo ""
 echo "Starting Media Downloader application..."
-echo "Once started, access the application at: http://$LOCAL_IP:5000"
+echo "Once started, access the application at: http://$LOCAL_IP:$PORT"
 echo ""
 
 # Start the application with output logging

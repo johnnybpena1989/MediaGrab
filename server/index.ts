@@ -71,10 +71,11 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
+  // Set up the port for the server
+  // Use PORT environment variable if set, otherwise use default values
+  // For Raspberry Pi and other local installations, this can be configured
+  const defaultPort = 5000;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : defaultPort;
   
   // Check the environment we're running in
   const isReplit = process.env.REPL_ID || process.env.REPLIT_DEPLOYMENT_ID;
