@@ -5,6 +5,7 @@ import { z } from "zod";
 import { urlAnalyzeSchema, downloadRequestSchema } from "@shared/schema";
 import { analyzeUrl, downloadMedia, cancelDownload, getDownloadProgress } from "./services/downloader";
 import { authenticateYouTube, validateCookies } from "./services/youtubeAuth";
+import { sendDownloadCompleteNotification } from "./services/emailService";
 import path from "path";
 import fs from "fs";
 import "express-session";
