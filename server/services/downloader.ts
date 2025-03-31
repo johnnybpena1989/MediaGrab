@@ -269,17 +269,18 @@ async function analyzeGenericUrl(url: string) {
 async function analyzeYouTubeUrl(url: string) {
   // Try multiple approaches to bypass YouTube restrictions
   const approaches = [
-    // 1. Try Best-first approach with high quality formats
+    // 1. Try the most reliable approach prioritizing successful download over quality
     async () => {
-      console.log("Trying best format approach...");
+      console.log("Trying most reliable approach...");
       await randomDelay(100, 500); // Short delay to seem more natural
       
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--format-sort', 'res,fps,codec:h264',  // Prioritize by resolution, then fps, prefer h264 codec
-        '--user-agent', getRandomUserAgent(false), // Desktop user agent
+        '--format-sort', 'hasvid,filesize,height', // Prioritize having video, smaller files are more reliable
+        '--extractor-args', 'youtube:player_client=android,player_skip=webpage,embed',
+        '--user-agent', getRandomUserAgent(true), // Mobile user agent works better
         url
       ];
       
@@ -458,8 +459,8 @@ function processVideoInfo(info: any, url: string) {
           // Create a unique key combining resolution and any quality notes
           const qualityKey = `${resolution}-${format.format_note || ''}-${qualityLabel}`;
           
-          // Only add if the resolution is higher than what we already have
-          if (!uniqueResolutions.has(qualityKey) && format.height >= 720) {
+          // Add all available formats at different resolutions but only if they're not extremely similar
+          if (!uniqueResolutions.has(qualityKey)) {
             uniqueResolutions.add(qualityKey);
             
             // If we have an audio format, create a merged format ID
@@ -467,9 +468,12 @@ function processVideoInfo(info: any, url: string) {
               ? `${format.format_id}+${bestAudioFormatId}` 
               : format.format_id;
             
+            // Label high quality videos distinctly
+            const qualityTag = format.height >= 720 ? ` (HD)` : '';
+            
             videoFormats.push({
               formatId: formatId,
-              quality: qualityLabel || `${resolution} (HD)`,
+              quality: qualityLabel || `${resolution}${qualityTag}`,
               resolution: resolution,
               filesize: format.filesize || 0,
               extension: format.ext || 'mp4',
@@ -530,13 +534,14 @@ export function downloadMedia(
     
     // Add platform-specific parameters
     if (platform === "YouTube") {
-      // For YouTube, include best format options to get higher quality videos
+      // For YouTube, use a more reliable approach with simpler format selection
+      // This prioritizes formats that are more likely to bypass bot protection
       ytDlpArgs.push(
-        "--format-sort", "res,fps,codec:h264",
+        "--format-sort", "hasvid,filesize,height",
         "--extractor-args", 
-        "youtube:player_client=android",
+        "youtube:player_client=android,player_skip=webpage,embed",
         "--user-agent", 
-        getRandomUserAgent(false) // Use desktop user agent for better quality
+        getRandomUserAgent(true) // Mobile user agents actually work better for YouTube
       );
     } else if (platform === "TikTok") {
       // TikTok-specific options to ensure better download success
