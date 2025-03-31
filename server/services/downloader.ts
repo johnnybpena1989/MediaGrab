@@ -5,11 +5,15 @@ import { promisify } from "util";
 import { MediaFormat, VideoFormat, AudioFormat, isVideoFormat, isAudioFormat } from "@shared/schema";
 import { spawn } from "child_process";
 import { activeDownloads } from "../routes";
+import { validateCookies } from "./youtubeAuth";
 
 const execAsync = promisify(exec);
 
 // Local map to store processes for cancelation
 const downloadProcesses = new Map();
+
+// Map to store user cookie files for YouTube authentication
+const userCookies = new Map<string, string>();
 
 // Collection of mobile user agents for rotation
 const mobileUserAgents = [
@@ -516,7 +520,8 @@ export function downloadMedia(
   formatId: string, 
   quality: string, 
   downloadId: string,
-  callback: (error: Error | null, filePath?: string) => void
+  callback: (error: Error | null, filePath?: string) => void,
+  ytCookieFile?: string
 ) {
   try {
     const downloadsDir = path.join(process.cwd(), "downloads");
@@ -548,6 +553,12 @@ export function downloadMedia(
         "--add-header", "sec-ch-ua-mobile:?1",
         "--add-header", "sec-ch-ua-platform:\"Android\""
       );
+      
+      // If YouTube cookie file is available, use it for authentication
+      if (ytCookieFile && fs.existsSync(ytCookieFile)) {
+        console.log(`Using YouTube cookie file: ${ytCookieFile}`);
+        ytDlpArgs.push("--cookies", ytCookieFile);
+      }
     } else if (platform === "TikTok") {
       // Enhanced TikTok-specific options to ensure better download success
       ytDlpArgs.push(
@@ -604,6 +615,8 @@ export function downloadMedia(
     // Add referer headers for specific platforms
     if (platform === "YouTube") {
       ytDlpArgs.push("--referer", "https://www.youtube.com/");
+      
+      // Note: Cookie support is already added in the YouTube-specific section above
     } else if (platform === "Instagram") {
       ytDlpArgs.push("--referer", "https://www.instagram.com/");
     } else if (platform === "X") {

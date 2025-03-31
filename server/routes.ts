@@ -1,9 +1,10 @@
-import express, { type Express, Request, Response } from "express";
+import express, { type Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { urlAnalyzeSchema, downloadRequestSchema } from "@shared/schema";
 import { analyzeUrl, downloadMedia, cancelDownload, getDownloadProgress } from "./services/downloader";
+import { authenticateYouTube, validateCookies } from "./services/youtubeAuth";
 import path from "path";
 import fs from "fs";
 import "express-session";
@@ -12,6 +13,7 @@ import "express-session";
 declare module "express-session" {
   interface SessionData {
     downloadId?: string;
+    youtubeCookieFile?: string;
   }
 }
 
@@ -181,8 +183,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fs.mkdirSync(downloadsDir, { recursive: true });
       }
       
+      // Get the YouTube cookie file from the session if available
+      const ytCookieFile = req.session?.youtubeCookieFile;
+      
+      // Pass the YouTube cookie file to the download function if available
       // Start the download process in the background
-      downloadMedia(url, format, quality, downloadId, (error, filePath) => {
+      downloadMedia(url, format, quality, downloadId, ytCookieFile, (error: Error | null, filePath?: string) => {
         if (error) {
           console.error("Download error:", error);
           
@@ -659,6 +665,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({
         success: false,
         message: "Failed to retrieve download file."
+      });
+    }
+  });
+
+  // YouTube Login API to authenticate and get cookies for YouTube downloads
+  app.post("/api/youtube/login", async (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Username and password are required"
+        });
+      }
+      
+      // Attempt to authenticate with YouTube
+      try {
+        const cookieFile = await authenticateYouTube(username, password);
+        
+        if (cookieFile) {
+          // Store cookie file path in session for later use
+          if (req.session) {
+            req.session.youtubeCookieFile = cookieFile;
+          }
+          
+          return res.status(200).json({
+            success: true,
+            message: "Successfully authenticated with YouTube",
+            cookieData: cookieFile
+          });
+        } else {
+          return res.status(401).json({
+            success: false,
+            message: "Authentication failed. Please check your credentials."
+          });
+        }
+      } catch (authError: any) {
+        console.error("YouTube authentication error:", authError);
+        
+        return res.status(401).json({
+          success: false,
+          message: authError.message || "Authentication failed. Please check your credentials."
+        });
+      }
+    } catch (error: any) {
+      console.error("Unexpected error in YouTube login endpoint:", error);
+      
+      return res.status(500).json({
+        success: false,
+        message: "An unexpected error occurred during authentication."
+      });
+    }
+  });
+  
+  // Validate YouTube cookies
+  app.get("/api/youtube/validate-cookies", async (req: Request, res: Response) => {
+    try {
+      const cookieFile = req.session?.youtubeCookieFile;
+      
+      if (!cookieFile) {
+        return res.status(404).json({
+          success: false,
+          message: "No YouTube authentication found. Please log in."
+        });
+      }
+      
+      const isValid = await validateCookies(cookieFile);
+      
+      if (isValid) {
+        return res.status(200).json({
+          success: true,
+          message: "YouTube authentication is valid",
+          isValid: true
+        });
+      } else {
+        // Clear invalid cookie file from session
+        req.session!.youtubeCookieFile = undefined;
+        
+        return res.status(401).json({
+          success: false,
+          message: "YouTube authentication has expired. Please log in again.",
+          isValid: false
+        });
+      }
+    } catch (error: any) {
+      console.error("Error validating YouTube cookies:", error);
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to validate YouTube authentication."
       });
     }
   });
