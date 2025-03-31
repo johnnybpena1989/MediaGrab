@@ -145,13 +145,24 @@ set NODE_ENV=development
 
 :: Start the application in development mode
 echo Starting the application in development mode...
-call npm run dev
+echo Log file will be created at: logs\app.log
+
+:: Run the application with output logged
+call npm run dev > logs\app.log 2>&1
 
 :: Keep the window open on error
 if !errorlevel! neq 0 (
     echo.
     echo ERROR: Application exited with code !errorlevel!
-    echo Check logs directory for details.
+    echo Check logs\app.log for detailed error information.
+    echo.
+    echo Common issues and solutions:
+    echo 1. Port 5000 already in use: Close other applications or change the port in server/index.ts
+    echo 2. Socket binding issues: The application now uses 127.0.0.1 (localhost) which should work on Windows
+    echo 3. Missing dependencies: Try running 'npm install' manually
+    echo.
+    type logs\app.log | findstr /C:"Error" /C:"error" /C:"exception" /C:"fail"
+    echo.
     pause
 )
 

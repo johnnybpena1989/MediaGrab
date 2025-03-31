@@ -86,23 +86,15 @@ app.use((req, res, next) => {
       log(`serving on port ${port} (Replit environment)`);
     });
   } else if (isLocalEnv) {
-    // On local environments with the LOCAL_ENV flag, use 127.0.0.1
+    // On local environments with the LOCAL_ENV flag, use localhost (127.0.0.1)
+    // This is especially important for Windows where 0.0.0.0 may not work properly
     server.listen(port, "127.0.0.1", () => {
-      log(`serving on port ${port} (local Windows environment)`);
+      log(`serving on port ${port} (local environment - using 127.0.0.1)`);
     });
   } else {
-    // Default case - use different approaches based on the platform
-    try {
-      // First try with 0.0.0.0 which works on most systems
-      server.listen(port, "0.0.0.0", () => {
-        log(`serving on port ${port} (using 0.0.0.0)`);
-      });
-    } catch (err) {
-      // If that fails, fall back to localhost
-      console.error("Failed to bind to 0.0.0.0, falling back to 127.0.0.1");
-      server.listen(port, "127.0.0.1", () => {
-        log(`serving on port ${port} (fallback to localhost)`);
-      });
-    }
+    // Default case - use localhost for safety
+    server.listen(port, "127.0.0.1", () => {
+      log(`serving on port ${port} (using localhost/127.0.0.1)`);
+    });
   }
 })();
