@@ -229,26 +229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             downloadInfo.downloadTime = `${Math.floor(downloadTime / 60)}m ${Math.floor(downloadTime % 60)}s`;
           }
           
-          // Send email notification if user provided their email
-          if (req.body?.email && filePath) {
-            const fileName = path.basename(filePath);
-            const fileSize = downloadInfo.totalSize 
-              ? `${(downloadInfo.totalSize / (1024 * 1024)).toFixed(2)} MB` 
-              : "Unknown";
-              
-            // Create download URL (if accessible externally)
-            const downloadUrl = `/api/download/file/${downloadId}`;
-            
-            // Send email notification
-            sendDownloadCompleteNotification(
-              req.body.email,
-              fileName,
-              fileSize,
-              downloadUrl
-            ).catch(emailError => {
-              console.error("Failed to send email notification:", emailError);
-            });
-          }
+          // Email notifications are handled via mailto links
           
           activeDownloads.set(downloadId, downloadInfo);
           

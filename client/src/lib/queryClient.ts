@@ -15,6 +15,9 @@ export async function apiRequest<T = any>(
   // Make sure URL starts with / for relative URLs
   const fullUrl = url.startsWith('http') ? url : (url.startsWith('/') ? url : `/${url}`);
   
+  // Log API request for debugging
+  console.log(`API Request: ${method} ${fullUrl}`);
+  
   return fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
