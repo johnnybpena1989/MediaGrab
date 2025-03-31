@@ -188,7 +188,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Pass the YouTube cookie file to the download function if available
       // Start the download process in the background
-      downloadMedia(url, format, quality, downloadId, ytCookieFile, (error: Error | null, filePath?: string) => {
+      downloadMedia(
+        url, 
+        format, 
+        quality, 
+        downloadId, 
+        (error: Error | null, filePath?: string) => {
         if (error) {
           console.error("Download error:", error);
           
@@ -240,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }, 60000); // Delete after 1 minute
         }
-      });
+      }, ytCookieFile);
 
       // Return immediate confirmation that download process has started
       return res.status(202).json({ 
