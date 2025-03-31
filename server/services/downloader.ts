@@ -377,10 +377,14 @@ function processVideoInfo(info: any, url: string) {
   const videoFormats: any[] = [];
   const audioFormats: any[] = [];
   
+  // Determine if this is YouTube
+  const isYouTube = url.includes("youtube.com") || url.includes("youtu.be");
+  
   // Parse formats
   if (info.formats) {
     // Video formats (with video stream)
     const uniqueResolutions = new Set();
+    const uniqueAudioQualities = new Set();
     
     info.formats.forEach((format: any) => {
       if (format.vcodec !== 'none' && format.acodec !== 'none') {
@@ -402,15 +406,39 @@ function processVideoInfo(info: any, url: string) {
         }
       } else if (format.acodec !== 'none' && format.vcodec === 'none') {
         // This is an audio-only format
-        audioFormats.push({
-          formatId: format.format_id,
-          quality: format.abr ? `${format.abr}kbps` : 'Unknown',
-          bitrate: format.abr ? `${format.abr}kbps` : undefined,
-          filesize: format.filesize || 0,
-          extension: format.ext || 'mp3',
-          type: 'audio'
-        });
+        const quality = format.abr ? `${format.abr}kbps` : 'Unknown';
+        
+        // Skip if we already have this quality to avoid duplicates
+        if (!uniqueAudioQualities.has(quality)) {
+          uniqueAudioQualities.add(quality);
+          
+          // For YouTube, use a special format ID prefix to trigger our special handling
+          const formatId = isYouTube ? 
+            `audio-${format.format_id}` : // Add audio- prefix for YouTube
+            format.format_id;              // Use original for non-YouTube
+            
+          audioFormats.push({
+            formatId: formatId,
+            quality: quality,
+            bitrate: format.abr ? `${format.abr}kbps` : undefined,
+            filesize: format.filesize || 0,
+            extension: format.ext || 'mp3',
+            type: 'audio'
+          });
+        }
       }
+    });
+  }
+  
+  // If no audio formats were found but this is YouTube, add a generic high-quality option
+  if (audioFormats.length === 0 && isYouTube) {
+    audioFormats.push({
+      formatId: 'audio-bestaudio',
+      quality: 'High Quality',
+      bitrate: '128kbps',
+      filesize: 0, // Unknown until downloaded
+      extension: 'mp3',
+      type: 'audio'
     });
   }
   
@@ -426,8 +454,15 @@ function processVideoInfo(info: any, url: string) {
   
   audioFormats.sort((a, b) => {
     if (isAudioFormat(a) && isAudioFormat(b)) {
-      const bitrateA = parseInt((a.bitrate || '0').replace('kbps', ''));
-      const bitrateB = parseInt((b.bitrate || '0').replace('kbps', ''));
+      // Use a more robust parsing to handle the 'High Quality' case
+      const getBitrateValue = (format: any) => {
+        if (!format.bitrate) return 0;
+        const match = format.bitrate.match(/(\d+)kbps/);
+        return match ? parseInt(match[1]) : 0;
+      };
+      
+      const bitrateA = getBitrateValue(a);
+      const bitrateB = getBitrateValue(b);
       return bitrateB - bitrateA;
     }
     return 0;
@@ -460,24 +495,53 @@ export function downloadMedia(
     // Determine the platform for specialized handling
     const platform = getPlatformFromUrl(url);
     
+    // Check if this is an audio format for YouTube
+    const isYouTubeAudio = platform === "YouTube" && formatId.includes("audio");
+    
     // Build the yt-dlp command with options to bypass bot protection
     const ytDlpArgs = [
       "--newline",
       "--progress",
-      "-f", formatId,
-      "-o", outputTemplate,
       "--no-check-certificates",
       "--no-warnings"
     ];
     
+    // Special handling for YouTube audio downloads which tend to face 403 errors
+    if (isYouTubeAudio) {
+      // For audio-only downloads from YouTube, use a more general format selection
+      // This is more resilient to restrictions than a specific format ID
+      ytDlpArgs.push(
+        "-f", "bestaudio[ext=m4a]/bestaudio",
+        "--extract-audio",
+        "--audio-format", "mp3",
+        "--audio-quality", "0" // Best quality
+      );
+    } else {
+      // For all other cases, use the specified format ID
+      ytDlpArgs.push("-f", formatId);
+    }
+    
+    // Add the output template
+    ytDlpArgs.push("-o", outputTemplate);
+    
     // Add platform-specific parameters
     if (platform === "YouTube") {
-      // For YouTube, use mobile client approach which tends to work better
+      // Use a rotating set of client types to evade detection
+      const clientTypes = ["android", "ios", "web"];
+      const randomClient = clientTypes[Math.floor(Math.random() * clientTypes.length)];
+      
       ytDlpArgs.push(
         "--extractor-args", 
-        "youtube:player_client=android",
+        `youtube:player_client=${randomClient}`,
         "--user-agent", 
-        getRandomUserAgent(true)
+        getRandomUserAgent(randomClient !== "web") // Use mobile agent for mobile clients
+      );
+      
+      // Provide additional headers to look more like a legitimate device
+      ytDlpArgs.push(
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--add-header", "X-YouTube-Client-Name:3",
+        "--add-header", "X-YouTube-Client-Version:17.31.4"
       );
     } else if (platform === "TikTok") {
       // TikTok-specific options to ensure better download success
