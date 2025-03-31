@@ -1,70 +1,105 @@
 #!/bin/bash
 
-# Media Downloader - Raspberry Pi Service Installation Script
-echo "========================================================="
-echo "    Media Downloader - Service Installation Script"
-echo "========================================================="
-echo ""
+# Install Media Downloader as a systemd service
+# This script must be run as root (with sudo)
 
-# Default port - can be overridden by passing a parameter: ./install_as_service.sh 8080
-DEFAULT_PORT=3000
-PORT=${1:-$DEFAULT_PORT}
-
-# Get the absolute path of the application directory
-APP_DIR=$(pwd)
-SERVICE_NAME="media-downloader"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-
-# Check if script is run with sudo
+# Check if script is run as root
 if [ "$EUID" -ne 0 ]; then
-    echo "This script must be run with sudo to install the service."
-    echo "Please run: sudo $0 $PORT"
-    exit 1
+  echo "Please run this script as root (with sudo)"
+  exit 1
 fi
 
-# Make the run script executable
-chmod +x "${APP_DIR}/run_app.sh"
+# Get the absolute path of the current directory
+BASE_DIR=$(pwd)
 
 # Create the systemd service file
-echo "Creating systemd service file..."
-cat > $SERVICE_FILE << EOL
+cat > /etc/systemd/system/media-downloader.service << EOF
 [Unit]
-Description=Media Downloader Web Application
+Description=Media Downloader Service
 After=network.target
 
 [Service]
 Type=simple
 User=$(logname)
-WorkingDirectory=${APP_DIR}
-ExecStart=${APP_DIR}/run_app.sh ${PORT}
+WorkingDirectory=$BASE_DIR
+ExecStart=$BASE_DIR/run_app.sh
 Restart=on-failure
 RestartSec=10
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=${SERVICE_NAME}
-Environment=NODE_ENV=production PORT=${PORT} PI_ENV=true
+StandardOutput=journal
+StandardError=journal
+Environment=
 
 [Install]
 WantedBy=multi-user.target
-EOL
+EOF
 
-# Reload systemd, enable and start the service
-echo "Enabling and starting the service..."
+# Create the logs directory if it doesn't exist
+mkdir -p "$BASE_DIR/logs"
+chown $(logname):$(logname) "$BASE_DIR/logs"
+
+# Create the downloads directory if it doesn't exist
+mkdir -p "$BASE_DIR/downloads"
+chown $(logname):$(logname) "$BASE_DIR/downloads"
+
+# Create update script for yt-dlp
+cat > "$BASE_DIR/update_ytdlp.sh" << EOF
+#!/bin/bash
+
+# Get the latest yt-dlp release
+YT_DLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+BIN_DIR="$BASE_DIR/bin"
+
+# Create bin directory if it doesn't exist
+mkdir -p "\$BIN_DIR"
+
+# Download yt-dlp
+echo "Downloading latest yt-dlp..."
+curl -L \$YT_DLP_URL -o "\$BIN_DIR/yt-dlp"
+
+# Make it executable
+chmod +x "\$BIN_DIR/yt-dlp"
+
+echo "yt-dlp has been updated successfully!"
+EOF
+
+# Make the update script executable
+chmod +x "$BASE_DIR/update_ytdlp.sh"
+
+# Run the yt-dlp update script to download the latest version
+sudo -u $(logname) "$BASE_DIR/update_ytdlp.sh"
+
+# Reload systemd to recognize the new service
 systemctl daemon-reload
-systemctl enable ${SERVICE_NAME}
-systemctl start ${SERVICE_NAME}
 
-# Get local IP address
-LOCAL_IP=$(hostname -I | cut -d' ' -f1)
+# Enable the service to start at boot
+systemctl enable media-downloader
+
+# Start the service
+systemctl start media-downloader
+
+# Display status information
+echo "Media Downloader service has been installed and started."
+echo "Service status:"
+systemctl status media-downloader
 
 echo ""
-echo "Media Downloader service has been installed and started!"
-echo "You can access the application at: http://${LOCAL_IP}:${PORT}"
+echo "The service will automatically start on boot."
+echo "You can manually control it with these commands:"
+echo "  - sudo systemctl start media-downloader"
+echo "  - sudo systemctl stop media-downloader"
+echo "  - sudo systemctl restart media-downloader"
+
 echo ""
-echo "Useful commands:"
-echo "  - Check service status: sudo systemctl status ${SERVICE_NAME}"
-echo "  - View logs: sudo journalctl -u ${SERVICE_NAME} -f"
-echo "  - Restart service: sudo systemctl restart ${SERVICE_NAME}"
-echo "  - Stop service: sudo systemctl stop ${SERVICE_NAME}"
+echo "View logs with:"
+echo "  - journalctl -u media-downloader -f"
+
+# Get the local IP address
+IP_ADDRESS=$(hostname -I | awk '{print $1}')
+PORT=$(grep -o 'PORT=[0-9]*' "$BASE_DIR/run_app.sh" | cut -d'=' -f2)
+if [ -z "$PORT" ]; then
+  PORT=3000  # Default port if not found in run_app.sh
+fi
+
 echo ""
-echo "The service will automatically start when your Raspberry Pi boots up."
+echo "Access Media Downloader at: http://$IP_ADDRESS:$PORT"
+echo "from any device on your network."
