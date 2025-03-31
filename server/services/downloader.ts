@@ -278,28 +278,12 @@ async function analyzeYouTubeUrl(url: string) {
       console.log("Trying Android client approach...");
       await randomDelay(100, 500); // Short delay to seem more natural
       
-      // First, get the formats using --list-formats
-      const formatArgs = [
-        '--list-formats',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android',
-        '--user-agent', getRandomUserAgent(true), // Mobile user agent
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua:"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="99"',
-        '--add-header', 'sec-ch-ua-mobile:?1',
-        '--add-header', 'sec-ch-ua-platform:"Android"',
-        url
-      ];
-      
-      // First get the format list to verify the URL works
-      await execAsync(`yt-dlp ${formatArgs.map(arg => `"${arg}"`).join(' ')}`);
-      
-      // Then get the actual info
+      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--no-playlist',  // Avoid playlist parsing to simplify
         '--extractor-args', 'youtube:player_client=android',
         '--user-agent', getRandomUserAgent(true), // Mobile user agent
         '--add-header', 'Accept-Language:en-US,en;q=0.9',
@@ -318,28 +302,12 @@ async function analyzeYouTubeUrl(url: string) {
       console.log("Trying iOS client approach...");
       await randomDelay(300, 800);
       
-      // First, get the formats using --list-formats
-      const formatArgs = [
-        '--list-formats',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=ios',
-        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua:"Safari";v="17.3"',
-        '--add-header', 'sec-ch-ua-mobile:?1',
-        '--add-header', 'sec-ch-ua-platform:"iOS"',
-        url
-      ];
-      
-      // First get the format list to verify the URL works
-      await execAsync(`yt-dlp ${formatArgs.map(arg => `"${arg}"`).join(' ')}`);
-      
-      // If that worked, get the actual info
+      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--no-playlist',  // Avoid playlist parsing to simplify
         '--extractor-args', 'youtube:player_client=ios',
         '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
         '--add-header', 'Accept-Language:en-US,en;q=0.9',
@@ -358,29 +326,12 @@ async function analyzeYouTubeUrl(url: string) {
       console.log("Trying web client with enhanced headers...");
       await randomDelay(200, 700);
       
-      // First, get the formats using --list-formats
-      const formatArgs = [
-        '--list-formats',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--add-header', 'Origin:https://www.youtube.com',
-        '--add-header', 'Referer:https://www.youtube.com/',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua:"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="99"',
-        '--add-header', 'sec-ch-ua-mobile:?0',
-        '--add-header', 'sec-ch-ua-platform:"Windows"',
-        '--user-agent', getRandomUserAgent(false),
-        url
-      ];
-      
-      // First get the format list to verify the URL works
-      await execAsync(`yt-dlp ${formatArgs.map(arg => `"${arg}"`).join(' ')}`);
-      
-      // If that worked, get the actual info
+      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--no-playlist',  // Avoid playlist parsing to simplify
         '--add-header', 'Origin:https://www.youtube.com',
         '--add-header', 'Referer:https://www.youtube.com/',
         '--add-header', 'Accept-Language:en-US,en;q=0.9',
@@ -411,25 +362,12 @@ async function analyzeYouTubeUrl(url: string) {
       
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
       
-      // First, get the formats using --list-formats
-      const formatArgs = [
-        '--list-formats',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'Referer:https://www.google.com/',
-        '--user-agent', getRandomUserAgent(false),
-        embedUrl
-      ];
-      
-      // First get the format list to verify the URL works
-      await execAsync(`yt-dlp ${formatArgs.map(arg => `"${arg}"`).join(' ')}`);
-      
-      // If that worked, get the actual info
+      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--no-playlist',  // Avoid playlist parsing to simplify
         '--add-header', 'Accept-Language:en-US,en;q=0.9',
         '--add-header', 'Referer:https://www.google.com/',
         '--user-agent', getRandomUserAgent(false),
@@ -456,26 +394,12 @@ async function analyzeYouTubeUrl(url: string) {
       
       const mobileUrl = `https://m.youtube.com/watch?v=${videoId}`;
       
-      // First, get the formats using --list-formats
-      const formatArgs = [
-        '--list-formats',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua-mobile:?1',
-        '--add-header', 'sec-ch-ua-platform:"Android"',
-        '--user-agent', getRandomUserAgent(true),
-        mobileUrl
-      ];
-      
-      // First get the format list to verify the URL works
-      await execAsync(`yt-dlp ${formatArgs.map(arg => `"${arg}"`).join(' ')}`);
-      
-      // If that worked, get the actual info
+      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--no-playlist',  // Avoid playlist parsing to simplify
         '--add-header', 'Accept-Language:en-US,en;q=0.9',
         '--add-header', 'sec-ch-ua-mobile:?1',
         '--add-header', 'sec-ch-ua-platform:"Android"',
@@ -487,16 +411,17 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 6. Try with YouTube API approach but first check formats
+    // 6. Try with YouTube API approach
     async () => {
-      console.log("Trying YouTube API approach with format check...");
+      console.log("Trying YouTube API approach...");
       await randomDelay(400, 900);
       
-      // First, get the formats using --list-formats
-      const formatArgs = [
-        '--list-formats',
+      // Skip the format listing check and go directly to fetching the full information
+      const args = [
+        '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
+        '--no-playlist',  // Avoid playlist parsing to simplify
         '--extractor-args', 'youtube:player_skip=js',
         '--extractor-args', 'youtube:player_client=web',
         '--add-header', 'X-YouTube-Client-Name:1',
@@ -505,18 +430,23 @@ async function analyzeYouTubeUrl(url: string) {
         url
       ];
       
-      // First get the format list to verify the URL works
-      await execAsync(`yt-dlp ${formatArgs.map(arg => `"${arg}"`).join(' ')}`);
+      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
+      return JSON.parse(stdout);
+    },
+    
+    // 7. Try with YouTube consent approach
+    async () => {
+      console.log("Trying YouTube with consent cookie...");
+      await randomDelay(400, 900);
       
-      // If that worked, get the actual info
+      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--extractor-args', 'youtube:player_skip=js',
-        '--extractor-args', 'youtube:player_client=web',
-        '--add-header', 'X-YouTube-Client-Name:1',
-        '--add-header', 'X-YouTube-Client-Version:2.20240322.09.00',
+        '--no-playlist',  // Avoid playlist parsing to simplify
+        '--cookies-from-browser', 'chrome',
+        '--add-header', 'Cookie:CONSENT=YES+cb',
         '--user-agent', getRandomUserAgent(false),
         url
       ];
