@@ -1,149 +1,296 @@
-# Media Downloader - Raspberry Pi Setup Guide
+# Raspberry Pi Setup Guide
 
-This guide will help you set up the Media Downloader application on your Raspberry Pi, allowing you to access it from any device on your home network.
+This guide provides detailed instructions for setting up the Media Downloader on a Raspberry Pi to create a network-accessible download server for all devices on your home network.
+
+## Why Use a Raspberry Pi?
+
+Running the Media Downloader on a Raspberry Pi offers several advantages:
+
+1. **Always on**: Your Raspberry Pi can run 24/7 with minimal power consumption
+2. **Network accessibility**: All devices on your network can access the service without installation
+3. **Centralized downloads**: Files download to a single location, making organization easier
+4. **No installation needed** on each device: Just access through any web browser
 
 ## Requirements
 
-- Raspberry Pi (3 or newer recommended)
-- Raspbian OS / Raspberry Pi OS installed
+- Raspberry Pi (any model, but Pi 3 or newer recommended for better performance)
+- Raspberry Pi OS (formerly Raspbian) installed and configured
 - Internet connection
-- Node.js (v16 or newer)
+- Basic knowledge of terminal commands
 
-## Installation Steps
+## Installation
 
-### 1. Install Node.js (if not already installed)
+### Step 1: Update Your Raspberry Pi
 
 ```bash
-# Update your system
 sudo apt update
 sudo apt upgrade -y
-
-# Install Node.js and npm
-sudo apt install -y nodejs npm
-
-# Check Node.js version
-node -v
 ```
 
-If the Node.js version is below 16, you may need to install a newer version:
+### Step 2: Install Node.js
 
 ```bash
-# Install Node.js 16
+# Install Node.js (if not already installed)
 curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-sudo apt install -y nodejs
+sudo apt-get install -y nodejs
 ```
 
-### 2. Set Up the Application
-
-Transfer the Media Downloader files to your Raspberry Pi using one of these methods:
-- Copy from a USB drive
-- Use `scp` to copy files from another computer
-- Clone from a Git repository if available
-- Download and extract a zip file
-
-Navigate to the application directory:
+### Step 3: Download the Media Downloader
 
 ```bash
-cd /path/to/media-downloader
+# Create a directory for the application
+mkdir -p ~/media-downloader
+cd ~/media-downloader
+
+# Clone or download the repository
+git clone <repository-url> .
+# Or unzip downloaded files into this directory
 ```
 
-### 3. Make the Scripts Executable
+### Step 4: Install Dependencies
 
 ```bash
+# Install npm dependencies
+npm install
+```
+
+### Step 5: Set Up the Service
+
+```bash
+# Make the scripts executable
 chmod +x run_app.sh
 chmod +x install_as_service.sh
-```
 
-### 4. Run the Application Manually
-
-To run the application with the default port (3000):
-
-```bash
-./run_app.sh
-```
-
-To run on a different port (for example, 8080):
-
-```bash
-./run_app.sh 8080
-```
-
-### 5. Install as a System Service (Optional, Recommended)
-
-To set up the application to run automatically when your Raspberry Pi boots:
-
-```bash
-# Install with default port (3000)
+# Run the installation script (installs as a system service)
 sudo ./install_as_service.sh
-
-# Or specify a custom port (e.g., 8080)
-sudo ./install_as_service.sh 8080
 ```
 
-## Accessing the Application
+## Configuration
 
-Once the application is running, you can access it from any device on your network:
+### Default Configuration
 
-1. Find your Raspberry Pi's IP address (usually displayed in the console when starting the app)
-2. Open a web browser on any device on your network
-3. Enter the URL: `http://[RASPBERRY_PI_IP]:[PORT]`
-   (e.g., `http://192.168.1.100:3000`)
+By default, the Media Downloader will:
+- Run on port 3000
+- Create downloads in the `~/media-downloader/downloads` directory
+- Start automatically when your Raspberry Pi boots
+
+### Changing the Port
+
+If you need to change the port (e.g., if port 3000 is being used by another service):
+
+1. Edit the `run_app.sh` script:
+   ```bash
+   nano run_app.sh
+   ```
+
+2. Change the `PORT` value to your desired port number:
+   ```bash
+   PORT=3000  # Change this to your desired port
+   ```
+
+3. Save the file (Ctrl+O, then Enter)
+
+4. Restart the service:
+   ```bash
+   sudo systemctl restart media-downloader
+   ```
+
+### Changing the Download Location
+
+To change where downloaded files are stored:
+
+1. Edit the `run_app.sh` script:
+   ```bash
+   nano run_app.sh
+   ```
+
+2. Change the `DOWNLOADS_DIR` value:
+   ```bash
+   DOWNLOADS_DIR="$BASE_DIR/downloads"  # Change this to your desired path
+   ```
+
+3. Make sure the directory exists and has proper permissions:
+   ```bash
+   mkdir -p [your new downloads directory]
+   chmod 755 [your new downloads directory]
+   ```
+
+4. Restart the service:
+   ```bash
+   sudo systemctl restart media-downloader
+   ```
+
+## Accessing the Media Downloader
+
+1. Find your Raspberry Pi's IP address:
+   ```bash
+   hostname -I
+   ```
+
+2. From any device on your network, open a web browser and navigate to:
+   ```
+   http://<your-pi-ip-address>:3000
+   ```
+   (replace `3000` with your custom port if you changed it)
 
 ## Managing the Service
 
-If you installed the application as a service, you can manage it with these commands:
+### Checking Service Status
 
 ```bash
-# Check the service status
 sudo systemctl status media-downloader
+```
 
-# View real-time logs
-sudo journalctl -u media-downloader -f
+### Stopping the Service
 
-# Restart the service
-sudo systemctl restart media-downloader
-
-# Stop the service
+```bash
 sudo systemctl stop media-downloader
+```
 
-# Start the service (if stopped)
+### Starting the Service
+
+```bash
 sudo systemctl start media-downloader
+```
 
-# Disable autostart at boot
+### Restarting the Service
+
+```bash
+sudo systemctl restart media-downloader
+```
+
+### Disabling Autostart
+
+If you don't want the service to start automatically on boot:
+
+```bash
 sudo systemctl disable media-downloader
+```
 
-# Enable autostart at boot
+### Re-enabling Autostart
+
+```bash
 sudo systemctl enable media-downloader
+```
+
+## Viewing Logs
+
+To view the service logs for troubleshooting:
+
+```bash
+journalctl -u media-downloader -f
+```
+
+## Accessing Downloaded Files
+
+### Option 1: Through the File System
+
+Connect to your Raspberry Pi using SSH or VNC and navigate to the downloads directory:
+
+```bash
+cd ~/media-downloader/downloads
+```
+
+### Option 2: Setting Up a Samba Share
+
+For easy access from Windows devices, you can set up a Samba share:
+
+```bash
+# Install Samba
+sudo apt install samba samba-common-bin -y
+
+# Create a backup of the Samba configuration
+sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.bak
+
+# Edit the Samba configuration
+sudo nano /etc/samba/smb.conf
+```
+
+Add the following at the end of the file:
+
+```
+[MediaDownloads]
+path = /home/pi/media-downloader/downloads
+browseable = yes
+writeable = yes
+create mask = 0777
+directory mask = 0777
+public = no
+```
+
+Set up a Samba password:
+
+```bash
+sudo smbpasswd -a pi
+```
+
+Restart the Samba service:
+
+```bash
+sudo systemctl restart smbd
+```
+
+Now you can access the downloads from any Windows device by navigating to:
+```
+\\<your-pi-ip-address>\MediaDownloads
 ```
 
 ## Troubleshooting
 
-### Application Not Starting
+### Service Won't Start
+
 Check the logs for errors:
 ```bash
-cat logs/app.log
-# Or if running as a service
-sudo journalctl -u media-downloader -e
+journalctl -u media-downloader -e
 ```
 
-### Port Already in Use
-If you get an error that the port is already in use, try a different port:
+Common issues:
+- Port already in use: Change the port as described in the Configuration section
+- Permission issues: Make sure the user running the service has access to the necessary directories
+
+### Cannot Access from Other Devices
+
+- Verify the Pi's IP address has not changed: `hostname -I`
+- Check if a firewall is blocking the port: `sudo ufw status`
+- If using a firewall, allow the port: `sudo ufw allow 3000/tcp`
+- Verify all devices are on the same network
+
+### Downloads Fail
+
+- Check if yt-dlp is installed and up to date:
+  ```bash
+  cd ~/media-downloader
+  ./update_ytdlp.sh
+  ```
+- Verify internet connectivity on the Raspberry Pi
+- Check for storage space issues: `df -h`
+
+## Keeping the Software Updated
+
+### Updating the Media Downloader
+
 ```bash
-./run_app.sh 8081  # Try a different port number
+cd ~/media-downloader
+git pull
+npm install
+sudo systemctl restart media-downloader
 ```
 
-### Network Access Issues
-If you can't access the application from other devices:
-1. Check that your Raspberry Pi is on the same network
-2. Verify that the application is binding to "0.0.0.0" not "localhost"
-3. Ensure there's no firewall blocking the port
-
-## Updating the Application
-
-To update the application, stop the service, replace the files with the new version, and restart the service:
+### Updating yt-dlp
 
 ```bash
-sudo systemctl stop media-downloader
-# Update files here
-sudo systemctl start media-downloader
+cd ~/media-downloader
+./update_ytdlp.sh
 ```
+
+## Advanced: Adding HTTPS Support
+
+For secure access, you can set up HTTPS using a reverse proxy like Nginx with Let's Encrypt. This is recommended if you plan to access the service from outside your home network.
+
+This setup involves several steps and is beyond the scope of this basic guide. Research "Nginx Let's Encrypt Raspberry Pi" for detailed tutorials.
+
+## Security Considerations
+
+- The Media Downloader service does not include authentication. It's designed for use on trusted home networks.
+- If exposing to the internet (not recommended), use a VPN or add authentication through a reverse proxy.
+- Keep your Raspberry Pi and all software up to date to patch security vulnerabilities.
