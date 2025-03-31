@@ -59,7 +59,7 @@ export async function sendDownloadCompleteNotification(
   downloadUrl?: string
 ): Promise<boolean> {
   // Default sender email - should be configured in SendGrid
-  const fromEmail = process.env.NOTIFICATION_EMAIL || 'notifications@mediadownloader.app';
+  const fromEmail: string = process.env.NOTIFICATION_EMAIL ?? 'notifications@mediadownloader.app';
   
   const subject = 'Your Download is Complete';
   
