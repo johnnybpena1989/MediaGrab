@@ -1,10 +1,9 @@
-import express, { type Express, Request, Response, NextFunction } from "express";
+import express, { type Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { urlAnalyzeSchema, downloadRequestSchema } from "@shared/schema";
 import { analyzeUrl, downloadMedia, cancelDownload, getDownloadProgress } from "./services/downloader";
-import { authenticateYouTube, validateCookies } from "./services/youtubeAuth";
 import path from "path";
 import fs from "fs";
 import "express-session";
@@ -13,7 +12,6 @@ import "express-session";
 declare module "express-session" {
   interface SessionData {
     downloadId?: string;
-    youtubeCookieFile?: string;
   }
 }
 
@@ -183,17 +181,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fs.mkdirSync(downloadsDir, { recursive: true });
       }
       
-      // Get the YouTube cookie file from the session if available
-      const ytCookieFile = req.session?.youtubeCookieFile;
-      
-      // Pass the YouTube cookie file to the download function if available
       // Start the download process in the background
-      downloadMedia(
-        url, 
-        format, 
-        quality, 
-        downloadId, 
-        (error: Error | null, filePath?: string) => {
+      downloadMedia(url, format, quality, downloadId, (error, filePath) => {
         if (error) {
           console.error("Download error:", error);
           
@@ -234,8 +223,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             downloadInfo.downloadTime = `${Math.floor(downloadTime / 60)}m ${Math.floor(downloadTime % 60)}s`;
           }
           
-          // Email notifications are handled via mailto links
-          
           activeDownloads.set(downloadId, downloadInfo);
           
           // Clean up download info after a short delay
@@ -245,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }, 60000); // Delete after 1 minute
         }
-      }, ytCookieFile);
+      });
 
       // Return immediate confirmation that download process has started
       return res.status(202).json({ 
@@ -550,13 +537,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/download/file/:downloadId", (req: Request, res: Response) => {
     try {
       const { downloadId } = req.params;
-      console.log(`Initiating direct file download for:`, downloadId);
       
       // Get download information
       const downloadInfo = activeDownloads.get(downloadId);
       
       if (!downloadInfo || !downloadInfo.filePath) {
-        console.log(`Download info missing for ID: ${downloadId}`);
         return res.status(404).json({
           success: false,
           message: "Download not found or file path unavailable."
@@ -565,7 +550,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If download is still in progress
       if (!downloadInfo.completed && !downloadInfo.success && !downloadInfo.error) {
-        console.log(`Download still in progress: ${downloadInfo.progress || 0}%`);
         return res.json({
           success: true,
           status: "in_progress",
@@ -576,7 +560,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If there was an error
       if (downloadInfo.error) {
-        console.log(`Download error reported: ${downloadInfo.message}`);
         return res.json({
           success: false,
           status: "error",
@@ -584,68 +567,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Check if file exists and has a size > 0
+      // If download completed successfully
       if (downloadInfo.filePath && fs.existsSync(downloadInfo.filePath)) {
-        const fileStats = fs.statSync(downloadInfo.filePath);
         const filename = path.basename(downloadInfo.filePath);
         
-        // Log file information for debugging
-        console.log(`Downloading file: ${filename}, Size: ${fileStats.size} bytes`);
-        
-        if (fileStats.size === 0) {
-          console.error(`Error: File exists but has zero size: ${downloadInfo.filePath}`);
-          return res.status(500).json({
-            success: false,
-            message: "The downloaded file is empty (0 bytes). Please try downloading again."
-          });
-        }
-        
-        // Determine appropriate content type based on file extension
-        const ext = path.extname(filename).toLowerCase();
-        let contentType = 'application/octet-stream'; // Default
-        
-        if (ext === '.mp4' || ext === '.m4v') {
-          contentType = 'video/mp4';
-        } else if (ext === '.mp3') {
-          contentType = 'audio/mpeg';
-        } else if (ext === '.webm') {
-          contentType = 'video/webm';
-        } else if (ext === '.ogg') {
-          contentType = 'audio/ogg';
-        } else if (ext === '.wav') {
-          contentType = 'audio/wav';
-        } else if (ext === '.mov') {
-          contentType = 'video/quicktime';
-        }
-        
-        // Set proper headers for browser to download the file
+        // Set headers for browser to download the file
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Length', fileStats.size);
+        res.setHeader('Content-Type', 'application/octet-stream');
         
-        console.log(`Set content type to: ${contentType} for file: ${filename}`);
-        
-        // Stream the file to the client with proper error handling
+        // Stream the file to the client
         const fileStream = fs.createReadStream(downloadInfo.filePath);
+        fileStream.pipe(res);
         
-        // Handle errors during streaming
+        // Handle errors
         fileStream.on('error', (err) => {
-          console.error(`Error streaming file ${filename}:`, err);
+          console.error('Error streaming file:', err);
           if (!res.headersSent) {
             res.status(500).json({
               success: false,
               message: "Error streaming file to client."
             });
-          } else {
-            res.end();
           }
         });
         
-        // Use proper finish event to detect when response is complete
-        res.on('finish', () => {
-          console.log(`Finished sending file: ${filename}`);
-          
-          // Delete the file after a delay to ensure it's fully sent
+        // When download is complete, schedule the file for deletion
+        fileStream.on('close', () => {
+          // Delete the file after a short delay to ensure it's fully sent
           setTimeout(() => {
             try {
               if (fs.existsSync(downloadInfo.filePath)) {
@@ -655,11 +602,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch (err) {
               console.error('Error deleting file:', err);
             }
-          }, 10000); // 10 second delay to ensure file is fully downloaded by client
+          }, 5000);
         });
         
-        // Pipe the file stream to the response
-        fileStream.pipe(res);
         return;
       } else {
         return res.status(404).json({
@@ -672,97 +617,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({
         success: false,
         message: "Failed to retrieve download file."
-      });
-    }
-  });
-
-  // YouTube Login API to authenticate and get cookies for YouTube downloads
-  app.post("/api/youtube/login", async (req: Request, res: Response) => {
-    try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({
-          success: false,
-          message: "Username and password are required"
-        });
-      }
-      
-      // Attempt to authenticate with YouTube
-      try {
-        const cookieFile = await authenticateYouTube(username, password);
-        
-        if (cookieFile) {
-          // Store cookie file path in session for later use
-          if (req.session) {
-            req.session.youtubeCookieFile = cookieFile;
-          }
-          
-          return res.status(200).json({
-            success: true,
-            message: "Successfully authenticated with YouTube",
-            cookieData: cookieFile
-          });
-        } else {
-          return res.status(401).json({
-            success: false,
-            message: "Authentication failed. Please check your credentials."
-          });
-        }
-      } catch (authError: any) {
-        console.error("YouTube authentication error:", authError);
-        
-        return res.status(401).json({
-          success: false,
-          message: authError.message || "Authentication failed. Please check your credentials."
-        });
-      }
-    } catch (error: any) {
-      console.error("Unexpected error in YouTube login endpoint:", error);
-      
-      return res.status(500).json({
-        success: false,
-        message: "An unexpected error occurred during authentication."
-      });
-    }
-  });
-  
-  // Validate YouTube cookies
-  app.get("/api/youtube/validate-cookies", async (req: Request, res: Response) => {
-    try {
-      const cookieFile = req.session?.youtubeCookieFile;
-      
-      if (!cookieFile) {
-        return res.status(404).json({
-          success: false,
-          message: "No YouTube authentication found. Please log in."
-        });
-      }
-      
-      const isValid = await validateCookies(cookieFile);
-      
-      if (isValid) {
-        return res.status(200).json({
-          success: true,
-          message: "YouTube authentication is valid",
-          isValid: true
-        });
-      } else {
-        // Clear invalid cookie file from session
-        req.session!.youtubeCookieFile = undefined;
-        
-        return res.status(401).json({
-          success: false,
-          message: "YouTube authentication has expired. Please log in again.",
-          isValid: false
-        });
-      }
-    } catch (error: any) {
-      console.error("Error validating YouTube cookies:", error);
-      
-      return res.status(500).json({
-        success: false,
-        message: "Failed to validate YouTube authentication."
       });
     }
   });

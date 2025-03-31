@@ -5,15 +5,11 @@ import { promisify } from "util";
 import { MediaFormat, VideoFormat, AudioFormat, isVideoFormat, isAudioFormat } from "@shared/schema";
 import { spawn } from "child_process";
 import { activeDownloads } from "../routes";
-import { validateCookies } from "./youtubeAuth";
 
 const execAsync = promisify(exec);
 
 // Local map to store processes for cancelation
 const downloadProcesses = new Map();
-
-// Map to store user cookie files for YouTube authentication
-const userCookies = new Map<string, string>();
 
 // Collection of mobile user agents for rotation
 const mobileUserAgents = [
@@ -273,23 +269,17 @@ async function analyzeGenericUrl(url: string) {
 async function analyzeYouTubeUrl(url: string) {
   // Try multiple approaches to bypass YouTube restrictions
   const approaches = [
-    // 1. Try Android client approach with improved headers (often works well)
+    // 1. Try Android client approach (often works well)
     async () => {
       console.log("Trying Android client approach...");
       await randomDelay(100, 500); // Short delay to seem more natural
       
-      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
         '--extractor-args', 'youtube:player_client=android',
         '--user-agent', getRandomUserAgent(true), // Mobile user agent
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua:"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="99"',
-        '--add-header', 'sec-ch-ua-mobile:?1',
-        '--add-header', 'sec-ch-ua-platform:"Android"',
         url
       ];
       
@@ -297,23 +287,17 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 2. Try iOS client approach with improved headers
+    // 2. Try iOS client approach
     async () => {
       console.log("Trying iOS client approach...");
       await randomDelay(300, 800);
       
-      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
         '--extractor-args', 'youtube:player_client=ios',
         '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua:"Safari";v="17.3"',
-        '--add-header', 'sec-ch-ua-mobile:?1',
-        '--add-header', 'sec-ch-ua-platform:"iOS"',
         url
       ];
       
@@ -321,23 +305,17 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 3. Try web client with enhanced headers
+    // 3. Try web client with tweaked headers
     async () => {
-      console.log("Trying web client with enhanced headers...");
+      console.log("Trying web client with custom headers...");
       await randomDelay(200, 700);
       
-      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
         '--add-header', 'Origin:https://www.youtube.com',
         '--add-header', 'Referer:https://www.youtube.com/',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua:"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="99"',
-        '--add-header', 'sec-ch-ua-mobile:?0',
-        '--add-header', 'sec-ch-ua-platform:"Windows"',
         '--user-agent', getRandomUserAgent(false),
         url
       ];
@@ -346,7 +324,7 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 4. Try with alternative URL format (embed) and enhanced headers
+    // 4. Try with alternative URL format (embed)
     async () => {
       console.log("Trying embed URL format...");
       await randomDelay(300, 900);
@@ -361,94 +339,12 @@ async function analyzeYouTubeUrl(url: string) {
       if (!videoId) throw new Error("Could not extract video ID");
       
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      
-      // Skip the format listing check and go directly to fetching the full information
       const args = [
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'Referer:https://www.google.com/',
         '--user-agent', getRandomUserAgent(false),
         embedUrl
-      ];
-      
-      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
-      return JSON.parse(stdout);
-    },
-    
-    // 5. Try with YouTube mobile site URL
-    async () => {
-      console.log("Trying mobile site URL...");
-      await randomDelay(300, 800);
-      
-      let videoId = "";
-      if (url.includes("youtube.com/watch?v=")) {
-        videoId = url.split("v=")[1].split("&")[0];
-      } else if (url.includes("youtu.be/")) {
-        videoId = url.split("youtu.be/")[1].split("?")[0];
-      }
-      
-      if (!videoId) throw new Error("Could not extract video ID");
-      
-      const mobileUrl = `https://m.youtube.com/watch?v=${videoId}`;
-      
-      // Skip the format listing check and go directly to fetching the full information
-      const args = [
-        '--dump-json',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'sec-ch-ua-mobile:?1',
-        '--add-header', 'sec-ch-ua-platform:"Android"',
-        '--user-agent', getRandomUserAgent(true),
-        mobileUrl
-      ];
-      
-      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
-      return JSON.parse(stdout);
-    },
-    
-    // 6. Try with YouTube API approach
-    async () => {
-      console.log("Trying YouTube API approach...");
-      await randomDelay(400, 900);
-      
-      // Skip the format listing check and go directly to fetching the full information
-      const args = [
-        '--dump-json',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
-        '--extractor-args', 'youtube:player_skip=js',
-        '--extractor-args', 'youtube:player_client=web',
-        '--add-header', 'X-YouTube-Client-Name:1',
-        '--add-header', 'X-YouTube-Client-Version:2.20240322.09.00',
-        '--user-agent', getRandomUserAgent(false),
-        url
-      ];
-      
-      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
-      return JSON.parse(stdout);
-    },
-    
-    // 7. Try with YouTube consent approach
-    async () => {
-      console.log("Trying YouTube with consent cookie...");
-      await randomDelay(400, 900);
-      
-      // Skip the format listing check and go directly to fetching the full information
-      const args = [
-        '--dump-json',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--no-playlist',  // Avoid playlist parsing to simplify
-        '--cookies-from-browser', 'chrome',
-        '--add-header', 'Cookie:CONSENT=YES+cb',
-        '--user-agent', getRandomUserAgent(false),
-        url
       ];
       
       const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
@@ -555,8 +451,7 @@ export function downloadMedia(
   formatId: string, 
   quality: string, 
   downloadId: string,
-  callback: (error: Error | null, filePath?: string) => void,
-  ytCookieFile?: string
+  callback: (error: Error | null, filePath?: string) => void
 ) {
   try {
     const downloadsDir = path.join(process.cwd(), "downloads");
@@ -577,39 +472,22 @@ export function downloadMedia(
     
     // Add platform-specific parameters
     if (platform === "YouTube") {
-      // For YouTube, use mobile client approach with enhanced headers
+      // For YouTube, use mobile client approach which tends to work better
       ytDlpArgs.push(
         "--extractor-args", 
         "youtube:player_client=android",
         "--user-agent", 
-        getRandomUserAgent(true),
-        "--add-header", "Accept-Language:en-US,en;q=0.9",
-        "--add-header", "sec-ch-ua:\"Chromium\";v=\"123\", \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"99\"",
-        "--add-header", "sec-ch-ua-mobile:?1",
-        "--add-header", "sec-ch-ua-platform:\"Android\""
+        getRandomUserAgent(true)
       );
-      
-      // If YouTube cookie file is available, use it for authentication
-      if (ytCookieFile && fs.existsSync(ytCookieFile)) {
-        console.log(`Using YouTube cookie file: ${ytCookieFile}`);
-        ytDlpArgs.push("--cookies", ytCookieFile);
-      }
     } else if (platform === "TikTok") {
-      // Enhanced TikTok-specific options to ensure better download success
+      // TikTok-specific options to ensure better download success
       ytDlpArgs.push(
         "--user-agent", 
         getRandomUserAgent(true),
         "--extractor-args",
         "tiktok:api_hostname=m.tiktok.com",
-        "--extractor-args",
-        "tiktok:download_preference=no_watermark", // Try to get version without watermark
-        "--retries", "3",         // Retry up to 3 times
-        "--fragment-retries", "5", // Retry up to 5 times for fragments
-        "--hls-prefer-native",    // Use the native HLS downloader 
-        "--fixup", "warn",        // Try to fix errors in the downloaded file
-        "--no-check-formats",     // Don't verify formats before downloading
-        "--force-overwrites",     // Overwrite if file exists
-        "--merge-output-format", "mp4" // Ensure final output is MP4
+        "--no-check-formats", // Don't verify formats before downloading
+        "--force-overwrites"  // Overwrite if file exists
       );
     } else if (platform === "Instagram") {
       // Instagram-specific options
@@ -650,26 +528,18 @@ export function downloadMedia(
     // Add referer headers for specific platforms
     if (platform === "YouTube") {
       ytDlpArgs.push("--referer", "https://www.youtube.com/");
-      
-      // Note: Cookie support is already added in the YouTube-specific section above
     } else if (platform === "Instagram") {
       ytDlpArgs.push("--referer", "https://www.instagram.com/");
     } else if (platform === "X") {
       ytDlpArgs.push("--referer", "https://twitter.com/");
     } else if (platform === "TikTok") {
-      // Enhanced TikTok referer and headers for better download success
       ytDlpArgs.push("--referer", "https://www.tiktok.com/");
+      // Add additional TikTok headers to appear more like a browser
       ytDlpArgs.push(
         "--add-header", "Accept-Language:en-US,en;q=0.9",
-        "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "--add-header", "sec-ch-ua:\"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"99\"",
         "--add-header", "sec-ch-ua-mobile:?1",
-        "--add-header", "sec-ch-ua-platform:\"Android\"",
-        "--add-header", "sec-fetch-site:none",
-        "--add-header", "sec-fetch-mode:navigate",
-        "--add-header", "sec-fetch-user:?1",
-        "--add-header", "sec-fetch-dest:document",
-        "--add-header", "priority:high"
+        "--add-header", "sec-ch-ua-platform:\"Android\""
       );
     } else if (platform === "Facebook") {
       ytDlpArgs.push("--referer", "https://www.facebook.com/");
