@@ -5,7 +5,6 @@ import { z } from "zod";
 import { urlAnalyzeSchema, downloadRequestSchema } from "@shared/schema";
 import { analyzeUrl, downloadMedia, cancelDownload, getDownloadProgress } from "./services/downloader";
 import { authenticateYouTube, validateCookies } from "./services/youtubeAuth";
-import { sendDownloadCompleteNotification } from "./services/emailService";
 import path from "path";
 import fs from "fs";
 import "express-session";
@@ -228,6 +227,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (downloadInfo.startTime) {
             const downloadTime = (Date.now() - downloadInfo.startTime) / 1000; // in seconds
             downloadInfo.downloadTime = `${Math.floor(downloadTime / 60)}m ${Math.floor(downloadTime % 60)}s`;
+          }
+          
+          // Send email notification if user provided their email
+          if (req.body?.email && filePath) {
+            const fileName = path.basename(filePath);
+            const fileSize = downloadInfo.totalSize 
+              ? `${(downloadInfo.totalSize / (1024 * 1024)).toFixed(2)} MB` 
+              : "Unknown";
+              
+            // Create download URL (if accessible externally)
+            const downloadUrl = `/api/download/file/${downloadId}`;
+            
+            // Send email notification
+            sendDownloadCompleteNotification(
+              req.body.email,
+              fileName,
+              fileSize,
+              downloadUrl
+            ).catch(emailError => {
+              console.error("Failed to send email notification:", emailError);
+            });
           }
           
           activeDownloads.set(downloadId, downloadInfo);

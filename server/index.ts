@@ -71,58 +71,38 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Set up the port for the server
-  // Use PORT environment variable if set, otherwise use default values
-  // For Raspberry Pi and other local installations, this can be configured
-  const defaultPort = 5000;
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : defaultPort;
+  // ALWAYS serve the app on port 5000
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
+  const port = 5000;
   
-  // Check the environment we're running in
+  // Check if we're running in a local environment or on Replit
   const isReplit = process.env.REPL_ID || process.env.REPLIT_DEPLOYMENT_ID;
   const isLocalEnv = process.env.LOCAL_ENV === 'true';
-  const isPiEnv = process.env.PI_ENV === 'true';
-  const isWindowsEnv = process.platform === 'win32';
   
   if (isReplit) {
     // On Replit, use "::" (IPv6 equivalent of 0.0.0.0) to listen on all interfaces
     server.listen(port, "::", () => {
       log(`serving on port ${port} (Replit environment)`);
     });
-  } else if (isPiEnv) {
-    // On Raspberry Pi, listen on all network interfaces (0.0.0.0)
-    // This allows other devices on the network to access the app
-    server.listen(port, "0.0.0.0", () => {
-      try {
-        // Try to get the Raspberry Pi's IP address for convenience
-        const { networkInterfaces } = require('os');
-        const nets = networkInterfaces();
-        let localIp = '0.0.0.0';
-        
-        // Find a non-internal IPv4 address
-        for (const name of Object.keys(nets)) {
-          for (const net of nets[name]) {
-            if (net.family === 'IPv4' && !net.internal) {
-              localIp = net.address;
-              break;
-            }
-          }
-        }
-        
-        log(`serving on port ${port} (Raspberry Pi - accessible at http://${localIp}:${port})`);
-      } catch (err) {
-        log(`serving on port ${port} (Raspberry Pi - accessible on local network)`);
-      }
-    });
-  } else if (isLocalEnv && isWindowsEnv) {
-    // On Windows local environments, use localhost (127.0.0.1)
+  } else if (isLocalEnv) {
+    // On local environments with the LOCAL_ENV flag, use 127.0.0.1
     server.listen(port, "127.0.0.1", () => {
-      log(`serving on port ${port} (Windows local environment - using 127.0.0.1)`);
+      log(`serving on port ${port} (local Windows environment)`);
     });
   } else {
-    // Default case - determine based on platform
-    const host = isWindowsEnv ? "127.0.0.1" : "0.0.0.0";
-    server.listen(port, host, () => {
-      log(`serving on port ${port} (using ${host})`);
-    });
+    // Default case - use different approaches based on the platform
+    try {
+      // First try with 0.0.0.0 which works on most systems
+      server.listen(port, "0.0.0.0", () => {
+        log(`serving on port ${port} (using 0.0.0.0)`);
+      });
+    } catch (err) {
+      // If that fails, fall back to localhost
+      console.error("Failed to bind to 0.0.0.0, falling back to 127.0.0.1");
+      server.listen(port, "127.0.0.1", () => {
+        log(`serving on port ${port} (fallback to localhost)`);
+      });
+    }
   }
 })();
