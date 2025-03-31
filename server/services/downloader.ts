@@ -269,26 +269,7 @@ async function analyzeGenericUrl(url: string) {
 async function analyzeYouTubeUrl(url: string) {
   // Try multiple approaches to bypass YouTube restrictions
   const approaches = [
-    // 1. Try the most reliable approach prioritizing successful download over quality
-    async () => {
-      console.log("Trying most reliable approach...");
-      await randomDelay(100, 500); // Short delay to seem more natural
-      
-      const args = [
-        '--dump-json',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--format-sort', 'hasvid,filesize,height', // Prioritize having video, smaller files are more reliable
-        '--extractor-args', 'youtube:player_client=android,player_skip=webpage,embed',
-        '--user-agent', getRandomUserAgent(true), // Mobile user agent works better
-        url
-      ];
-      
-      const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
-      return JSON.parse(stdout);
-    },
-    
-    // 2. Try Android client approach (often works well)
+    // 1. Try Android client approach (often works well)
     async () => {
       console.log("Trying Android client approach...");
       await randomDelay(100, 500); // Short delay to seem more natural
@@ -298,7 +279,6 @@ async function analyzeYouTubeUrl(url: string) {
         '--no-check-certificates',
         '--no-warnings',
         '--extractor-args', 'youtube:player_client=android',
-        '--format-sort', 'res,fps',  // Prioritize by resolution, then fps
         '--user-agent', getRandomUserAgent(true), // Mobile user agent
         url
       ];
@@ -307,7 +287,7 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 3. Try iOS client approach
+    // 2. Try iOS client approach
     async () => {
       console.log("Trying iOS client approach...");
       await randomDelay(300, 800);
@@ -317,7 +297,7 @@ async function analyzeYouTubeUrl(url: string) {
         '--no-check-certificates',
         '--no-warnings',
         '--extractor-args', 'youtube:player_client=ios',
-        '--user-agent', 'Mozilla/5.0.html (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
+        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
         url
       ];
       
@@ -325,7 +305,7 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 4. Try web client with tweaked headers
+    // 3. Try web client with tweaked headers
     async () => {
       console.log("Trying web client with custom headers...");
       await randomDelay(200, 700);
@@ -336,7 +316,6 @@ async function analyzeYouTubeUrl(url: string) {
         '--no-warnings',
         '--add-header', 'Origin:https://www.youtube.com',
         '--add-header', 'Referer:https://www.youtube.com/',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
         '--user-agent', getRandomUserAgent(false),
         url
       ];
@@ -345,7 +324,7 @@ async function analyzeYouTubeUrl(url: string) {
       return JSON.parse(stdout);
     },
     
-    // 5. Try with alternative URL format (embed)
+    // 4. Try with alternative URL format (embed)
     async () => {
       console.log("Trying embed URL format...");
       await randomDelay(300, 900);
@@ -364,7 +343,6 @@ async function analyzeYouTubeUrl(url: string) {
         '--dump-json',
         '--no-check-certificates',
         '--no-warnings',
-        '--format-sort', 'res,fps',  // Prioritize by resolution, then fps
         '--user-agent', getRandomUserAgent(false),
         embedUrl
       ];
@@ -400,29 +378,21 @@ function processVideoInfo(info: any, url: string) {
   
   // Parse formats
   if (info.formats) {
-    // Get best quality formats available
-    // First, try to get formats with both video and audio (best for most users)
+    // Video formats (with video stream)
     const uniqueResolutions = new Set();
     
-    // Add all available formats that include both video and audio streams
     info.formats.forEach((format: any) => {
       if (format.vcodec !== 'none' && format.acodec !== 'none') {
         // This is a format with both video and audio
         const resolution = format.height ? `${format.height}p` : 'Unknown';
-        const formatId = format.format_id;
-        const formatNote = format.format_note || '';
-        const qualityLabel = format.quality_label || '';
         
-        // Create a unique key combining resolution and any quality notes
-        const qualityKey = `${resolution}-${formatNote}-${qualityLabel}`;
-        
-        // Skip if we already have this resolution/quality to avoid duplicates
-        if (!uniqueResolutions.has(qualityKey)) {
-          uniqueResolutions.add(qualityKey);
+        // Skip if we already have this resolution to avoid duplicates
+        if (!uniqueResolutions.has(resolution)) {
+          uniqueResolutions.add(resolution);
           
           videoFormats.push({
-            formatId: formatId,
-            quality: qualityLabel || resolution,
+            formatId: format.format_id,
+            quality: format.height ? `${format.height}p` : 'Unknown',
             resolution: resolution,
             filesize: format.filesize || 0,
             extension: format.ext || 'mp4',
@@ -430,59 +400,8 @@ function processVideoInfo(info: any, url: string) {
           });
         }
       }
+      // We no longer process audio-only formats
     });
-    
-    // If we couldn't find many formats with both audio and video,
-    // add some video-only formats and append the best audio automatically
-    if (videoFormats.length < 3) {
-      // Find best audio format for potential merging
-      let bestAudioFormatId: string | null = null;
-      let bestAudioBitrate = -1;
-      
-      info.formats.forEach((format: any) => {
-        if (format.acodec !== 'none' && format.vcodec === 'none') {
-          const bitrate = parseInt(format.abr || '0');
-          if (bitrate > bestAudioBitrate) {
-            bestAudioBitrate = bitrate;
-            bestAudioFormatId = format.format_id;
-          }
-        }
-      });
-      
-      // Now look for video-only formats with higher quality
-      info.formats.forEach((format: any) => {
-        if (format.vcodec !== 'none' && format.acodec === 'none') {
-          // This is video-only, we'll need to specify audio format separately for download
-          const resolution = format.height ? `${format.height}p` : 'Unknown';
-          const qualityLabel = format.quality_label || '';
-          
-          // Create a unique key combining resolution and any quality notes
-          const qualityKey = `${resolution}-${format.format_note || ''}-${qualityLabel}`;
-          
-          // Add all available formats at different resolutions but only if they're not extremely similar
-          if (!uniqueResolutions.has(qualityKey)) {
-            uniqueResolutions.add(qualityKey);
-            
-            // If we have an audio format, create a merged format ID
-            const formatId = bestAudioFormatId 
-              ? `${format.format_id}+${bestAudioFormatId}` 
-              : format.format_id;
-            
-            // Label high quality videos distinctly
-            const qualityTag = format.height >= 720 ? ` (HD)` : '';
-            
-            videoFormats.push({
-              formatId: formatId,
-              quality: qualityLabel || `${resolution}${qualityTag}`,
-              resolution: resolution,
-              filesize: format.filesize || 0,
-              extension: format.ext || 'mp4',
-              type: 'video'
-            });
-          }
-        }
-      });
-    }
   }
   
   // Sort formats by quality (highest first for video)
@@ -534,14 +453,12 @@ export function downloadMedia(
     
     // Add platform-specific parameters
     if (platform === "YouTube") {
-      // For YouTube, use a more reliable approach with simpler format selection
-      // This prioritizes formats that are more likely to bypass bot protection
+      // For YouTube, use mobile client approach which tends to work better
       ytDlpArgs.push(
-        "--format-sort", "hasvid,filesize,height",
         "--extractor-args", 
-        "youtube:player_client=android,player_skip=webpage,embed",
+        "youtube:player_client=android",
         "--user-agent", 
-        getRandomUserAgent(true) // Mobile user agents actually work better for YouTube
+        getRandomUserAgent(true)
       );
     } else if (platform === "TikTok") {
       // TikTok-specific options to ensure better download success
