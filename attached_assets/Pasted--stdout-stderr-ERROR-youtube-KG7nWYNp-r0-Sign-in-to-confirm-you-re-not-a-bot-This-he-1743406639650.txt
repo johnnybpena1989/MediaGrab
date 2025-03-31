@@ -1,0 +1,67 @@
+  stdout: '',
+  stderr: 'ERROR: [youtube] KG7nWYNp_r0: Sign in to confirm you’re not a bot. This helps protect our community. Learn more\n'
+}
+Trying YouTube API approach...
+Approach failed: Error: Command failed: yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--extractor-args" "youtube:player_skip=js" "--extractor-args" "youtube:player_client=web" "--add-header" "X-YouTube-Client-Name:1" "--add-header" "X-YouTube-Client-Version:2.20240322.09.00" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"
+ERROR: [youtube] KG7nWYNp_r0: Requested format is not available. Use --list-formats for a list of available formats
+
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at ChildProcess.exithandler (node:child_process:422:12)
+    at ChildProcess.emit (node:events:518:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5) {
+  code: 1,
+  killed: false,
+  signal: null,
+  cmd: 'yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--extractor-args" "youtube:player_skip=js" "--extractor-args" "youtube:player_client=web" "--add-header" "X-YouTube-Client-Name:1" "--add-header" "X-YouTube-Client-Version:2.20240322.09.00" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"',
+  stdout: '',
+  stderr: 'ERROR: [youtube] KG7nWYNp_r0: Requested format is not available. Use --list-formats for a list of available formats\n'
+}
+Trying YouTube with consent cookie...
+Approach failed: Error: Command failed: yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--cookies-from-browser" "chrome" "--add-header" "Cookie:CONSENT=YES+cb" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"
+Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.
+ERROR: could not find chrome cookies database in "/home/runner/workspace/.config/google-chrome"
+
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at ChildProcess.exithandler (node:child_process:422:12)
+    at ChildProcess.emit (node:events:518:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5) {
+  code: 1,
+  killed: false,
+  signal: null,
+  cmd: 'yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--cookies-from-browser" "chrome" "--add-header" "Cookie:CONSENT=YES+cb" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"',
+  stdout: '',
+  stderr: 'Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.\n' +
+    'ERROR: could not find chrome cookies database in "/home/runner/workspace/.config/google-chrome"\n'
+}
+Error analyzing URL: Error: Command failed: yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--cookies-from-browser" "chrome" "--add-header" "Cookie:CONSENT=YES+cb" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"
+Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.
+ERROR: could not find chrome cookies database in "/home/runner/workspace/.config/google-chrome"
+
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at ChildProcess.exithandler (node:child_process:422:12)
+    at ChildProcess.emit (node:events:518:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5) {
+  code: 1,
+  killed: false,
+  signal: null,
+  cmd: 'yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--cookies-from-browser" "chrome" "--add-header" "Cookie:CONSENT=YES+cb" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"',
+  stdout: '',
+  stderr: 'Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.\n' +
+    'ERROR: could not find chrome cookies database in "/home/runner/workspace/.config/google-chrome"\n'
+}
+Error details: Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.
+ERROR: could not find chrome cookies database in "/home/runner/workspace/.config/google-chrome"
+
+Error analyzing URL: Error: Failed to analyze URL: Command failed: yt-dlp "--dump-json" "--no-check-certificates" "--no-warnings" "--no-playlist" "--cookies-from-browser" "chrome" "--add-header" "Cookie:CONSENT=YES+cb" "--user-agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0" "https://www.youtube.com/watch?v=KG7nWYNp_r0&ab_channel=NoCopyrightSounds"
+Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.
+ERROR: could not find chrome cookies database in "/home/runner/workspace/.config/google-chrome"
+. Please verify the URL is correct and try again.
+    at analyzeUrl (/home/runner/workspace/server/services/downloader.ts:130:11)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:73:27)
+7:36:28 AM [express] POST /api/analyze 451 in 28440ms :: {"success":false,"message":"Failed to analy…
