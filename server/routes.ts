@@ -592,7 +592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // When download is complete, schedule the file for deletion
         fileStream.on('close', () => {
-          // Delete the file after a short delay to ensure it's fully sent
+          // Delete the file after a longer delay to ensure it's fully sent and downloaded by client
           setTimeout(() => {
             try {
               if (fs.existsSync(downloadInfo.filePath)) {
@@ -602,7 +602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch (err) {
               console.error('Error deleting file:', err);
             }
-          }, 5000);
+          }, 60000); // 60 seconds instead of 5 seconds
         });
         
         return;
