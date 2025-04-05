@@ -213,6 +213,17 @@ async function analyzeTikTokUrl(url: string) {
 async function analyzeInstagramUrl(url: string) {
   console.log("Using Instagram-specific approach...");
   
+  // Check if Instagram credentials exist in environment variables
+  const instagramUsername = process.env.INSTAGRAM_USERNAME;
+  const instagramPassword = process.env.INSTAGRAM_PASSWORD;
+  const hasCredentials = instagramUsername && instagramPassword;
+  
+  if (hasCredentials) {
+    console.log("Using Instagram credentials for authentication");
+  } else {
+    console.log("No Instagram credentials found in environment. Some content may not be accessible.");
+  }
+  
   try {
     // Instagram prefers mobile user agents
     const userAgent = getRandomUserAgent(true);
@@ -225,17 +236,31 @@ async function analyzeInstagramUrl(url: string) {
       '--add-header', 'Accept-Language:en-US,en;q=0.9',
       '--add-header', 'sec-ch-ua-mobile:?1',
       '--add-header', 'sec-ch-ua-platform:"Android"',
-      '--referer', 'https://www.instagram.com/',
-      url
+      '--referer', 'https://www.instagram.com/'
     ];
     
-    console.log("Analyzing Instagram URL...");
+    // Add authentication if credentials are available
+    if (hasCredentials) {
+      args.push('--username', instagramUsername!);
+      args.push('--password', instagramPassword!);
+    }
+    
+    // Add URL last
+    args.push(url);
+    
+    console.log("Analyzing Instagram URL with authentication...");
     const { stdout } = await execAsync(`yt-dlp ${args.map(arg => `"${arg}"`).join(' ')}`);
     const info = JSON.parse(stdout);
     
     return processVideoInfo(info, url);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Instagram approach failed:", error);
+    
+    // Check if error is related to authentication
+    if (error.message && error.message.includes("login required")) {
+      throw new Error("This Instagram content requires authentication. Please set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD environment variables to access this content.");
+    }
+    
     throw error;
   }
 }
@@ -475,10 +500,24 @@ export function downloadMedia(
       ytDlpArgs.push(
         "--user-agent", 
         getRandomUserAgent(true),
-        "--add-header",
-        "Cookie:sessionid=none", // Use a placeholder sessionid
         "--no-check-formats"
       );
+      
+      // Add authentication if credentials are available
+      const instagramUsername = process.env.INSTAGRAM_USERNAME;
+      const instagramPassword = process.env.INSTAGRAM_PASSWORD;
+      
+      if (instagramUsername && instagramPassword) {
+        console.log("Using Instagram credentials for download");
+        ytDlpArgs.push(
+          "--username", 
+          instagramUsername,
+          "--password",
+          instagramPassword
+        );
+      } else {
+        console.log("No Instagram credentials found, trying without authentication");
+      }
     } else if (platform === "X") {
       // X/Twitter-specific options
       ytDlpArgs.push(
