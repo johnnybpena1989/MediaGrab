@@ -225,12 +225,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           activeDownloads.set(downloadId, downloadInfo);
           
-          // Clean up download info after a short delay
+          // Clean up download info after 5 minutes
           setTimeout(() => {
             if (activeDownloads.has(downloadId)) {
               activeDownloads.delete(downloadId);
             }
-          }, 60000); // Delete after 1 minute
+          }, 300000); // Delete after 5 minutes
         }
       });
 
@@ -502,11 +502,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Setup interval to send progress updates
       const progressInterval = setInterval(sendProgress, 1000);
       
-      // Clean up on client disconnect
-      req.on("close", () => {
-        clearInterval(progressInterval);
-      });
-      
       // Set a maximum SSE connection time to prevent hanging connections
       const maxConnectionTime = setTimeout(() => {
         clearInterval(progressInterval);
@@ -517,8 +512,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }, 30 * 60 * 1000); // 30 minutes max
       
+      // Clean up on client disconnect (handles both interval and timeout cleanup)
       req.on("close", () => {
+        clearInterval(progressInterval);
         clearTimeout(maxConnectionTime);
+        
+        // When client disconnects, check if we need to cleanup the download
+        // This handles browser refreshes and session closures
+        const download = activeDownloads.get(downloadId);
+        if (download && download.filePath && fs.existsSync(download.filePath)) {
+          console.log(`Client disconnected, scheduling cleanup for download: ${downloadId}`);
+          
+          // Schedule file for deletion when client disconnects
+          setTimeout(() => {
+            try {
+              // Check if file still exists before attempting deletion
+              if (fs.existsSync(download.filePath)) {
+                fs.unlinkSync(download.filePath);
+                console.log(`Client disconnected - Deleted file: ${download.filePath}`);
+              }
+              
+              // Remove from active downloads
+              activeDownloads.delete(downloadId);
+            } catch (err) {
+              console.error('Error during client disconnect cleanup:', err);
+            }
+          }, 300000); // 5 minutes
+        }
       });
       
     } catch (error) {
@@ -602,7 +622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch (err) {
               console.error('Error deleting file:', err);
             }
-          }, 60000); // 60 seconds instead of 5 seconds
+          }, 300000); // 300000 ms = 5 minutes
         });
         
         return;
