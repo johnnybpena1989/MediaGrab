@@ -30,6 +30,9 @@ print_error() {
     echo -e "${RED}${BOLD}$1${NC}"
 }
 
+# Get the current script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
 # Welcome message
 clear
 echo -e "${BOLD}================================================${NC}"
@@ -65,13 +68,13 @@ print_message "Step 1: Checking and installing dependencies..."
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
     print_warning "Node.js not found. Installing Node.js 20.x..."
-    
+
     # Update repository information for Node.js
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    
+
     # Install Node.js
     sudo apt-get install -y nodejs
-    
+
     # Verify installation
     node_version=$(node -v)
     print_message "Node.js $node_version installed successfully."
@@ -80,69 +83,48 @@ else
     print_message "Node.js $node_version is already installed."
 fi
 
-# Check if yt-dlp is installed
-if ! command -v yt-dlp &> /dev/null; then
-    print_warning "yt-dlp not found. Installing yt-dlp..."
-    
-    # Install python3-pip if not already installed
-    sudo apt-get update
-    sudo apt-get install -y python3-pip
-    
-    # Install yt-dlp using pip
-    sudo pip3 install -U yt-dlp
-    
-    print_message "yt-dlp installed successfully."
-else
-    print_message "yt-dlp is already installed."
-    
-    # Update yt-dlp to the latest version
-    print_warning "Updating yt-dlp to the latest version..."
-    sudo pip3 install -U yt-dlp
-    print_message "yt-dlp updated successfully."
-fi
-
-# Check for other required packages
-print_warning "Installing additional required packages..."
-sudo apt-get install -y ffmpeg python3 python3-pip
+# Check for required Python packages
+print_warning "Installing required Python packages..."
+sudo apt-get update
+sudo apt-get install -y ffmpeg python3 python3-pip python3-venv
 
 # Create installation directory
 print_message "Step 2: Setting up application directory..."
 mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
 
-# Clone the repository or download the release
-print_message "Step 3: Downloading the application..."
-if command -v git &> /dev/null; then
-    git clone https://github.com/yourusername/media-downloader.git .
-    if [ $? -ne 0 ]; then
-        print_error "Failed to clone repository. Falling back to direct download."
-        # Fallback to direct download if repository doesn't exist or is private
-        curl -L -o media-downloader.zip "https://github.com/yourusername/media-downloader/archive/refs/heads/main.zip"
-        unzip media-downloader.zip
-        mv media-downloader-main/* .
-        rm -rf media-downloader-main media-downloader.zip
-    fi
-else
-    sudo apt-get install -y unzip
-    curl -L -o media-downloader.zip "https://github.com/yourusername/media-downloader/archive/refs/heads/main.zip"
-    unzip media-downloader.zip
-    mv media-downloader-main/* .
-    rm -rf media-downloader-main media-downloader.zip
-fi
+# Copy local files instead of downloading from GitHub
+print_message "Step 3: Copying application files from script directory..."
+cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/"
+cd "$INSTALL_DIR"
 
 # Create downloads directory
 mkdir -p "$INSTALL_DIR/downloads"
 
-# Update the port in the configuration
+# Update port in configuration if needed
 print_message "Step 4: Configuring the application..."
-sed -i "s/const PORT = .*/const PORT = $PORT;/g" server/index.ts
+if [ -f "server/index.ts" ]; then
+    sed -i "s/const port = .*/const port = process.env.PORT ? parseInt(process.env.PORT, 10) : $PORT;/g" server/index.ts
+elif [ -f "raspberry_pi_config/modified_index.ts" ]; then
+    # Copy the modified index.ts to the correct location
+    cp "raspberry_pi_config/modified_index.ts" "server/index.ts"
+fi
+
+# Set up Python virtual environment
+print_message "Step 5: Setting up Python virtual environment..."
+python3 -m venv "$INSTALL_DIR/venv"
+source "$INSTALL_DIR/venv/bin/activate"
+
+# Install yt-dlp in the virtual environment
+print_warning "Installing yt-dlp in the virtual environment..."
+pip install --upgrade pip
+pip install -U yt-dlp
 
 # Install Node.js dependencies
-print_message "Step 5: Installing Node.js dependencies..."
+print_message "Step 6: Installing Node.js dependencies..."
 npm install
 
 # Create a systemd service file for autostart
-print_message "Step 6: Setting up autostart service..."
+print_message "Step 7: Setting up autostart service..."
 
 SERVICE_FILE="$INSTALL_DIR/media-downloader.service"
 cat > "$SERVICE_FILE" << EOL
@@ -151,7 +133,7 @@ Description=Media Downloader Application
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/npm run dev
+ExecStart=/bin/bash -c "source $INSTALL_DIR/venv/bin/activate && PORT=$PORT /usr/bin/npm run dev"
 WorkingDirectory=$INSTALL_DIR
 Environment=PORT=$PORT
 Restart=always
@@ -173,27 +155,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable media-downloader
 sudo systemctl start media-downloader
 
-# Create a desktop shortcut
-print_message "Step 7: Creating desktop shortcut..."
-DESKTOP_FILE="$HOME/Desktop/Media-Downloader.desktop"
-cat > "$DESKTOP_FILE" << EOL
-[Desktop Entry]
-Name=Media Downloader
-Comment=Download videos from various platforms
-Exec=xdg-open http://localhost:$PORT
-Icon=web-browser
-Terminal=false
-Type=Application
-Categories=Network;Video;
-EOL
-
-chmod +x "$DESKTOP_FILE"
-
 # Create a startup script
 STARTUP_SCRIPT="$INSTALL_DIR/start_media_downloader.sh"
 cat > "$STARTUP_SCRIPT" << EOL
 #!/bin/bash
 cd "$INSTALL_DIR"
+source "$INSTALL_DIR/venv/bin/activate"
 PORT=$PORT npm run dev
 EOL
 
@@ -211,7 +178,5 @@ echo "- Access the application at http://localhost:$PORT"
 echo "- Start manually with: bash $STARTUP_SCRIPT"
 echo "- Manage the service with: sudo systemctl (start|stop|restart) media-downloader"
 echo "- View logs with: sudo journalctl -u media-downloader -f"
-echo ""
-echo "A desktop shortcut has been created for easy access."
 echo ""
 print_message "Installation complete! Enjoy your Media Downloader application!"
