@@ -41,20 +41,47 @@ fi
 # Check and install dependencies
 print_message "Installing dependencies..."
 sudo apt-get update
-sudo apt-get install -y nodejs npm ffmpeg python3 python3-pip python3-venv git
+
+# Check if Node.js is already installed
+if command -v node &> /dev/null; then
+    node_version=$(node -v)
+    print_message "Node.js $node_version is already installed."
+else
+    print_warning "Installing Node.js..."
+    # Use nodesource script for Node.js installation
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+fi
+
+# Install other dependencies one by one to avoid conflicts
+print_message "Installing other dependencies..."
+sudo apt-get install -y ffmpeg
+sudo apt-get install -y python3 python3-pip python3-venv
+sudo apt-get install -y git
 
 # Create installation directory
 print_message "Setting up application directory..."
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# Clone the repository (update this with your actual repository URL)
+# Clone the repository (check if directory exists first)
 print_message "Downloading MediaGrab..."
-git clone https://github.com/yourusername/mediagrab.git "$INSTALL_DIR" || {
-    # If directory already exists and clone fails, just pull the latest changes
+if [ -d "$INSTALL_DIR/.git" ]; then
+    print_message "Directory already exists, updating from git..."
     cd "$INSTALL_DIR"
     git pull
-}
+else
+    # First remove the directory if it exists but isn't a git repo
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+    fi
+    # Clone the repository
+    git clone https://github.com/yourusername/mediagrab.git "$INSTALL_DIR" || {
+        print_error "Failed to clone repository. Please check your internet connection or repository URL."
+        exit 1
+    }
+    cd "$INSTALL_DIR"
+fi
 
 # Set up Python virtual environment
 print_message "Setting up Python virtual environment..."
@@ -170,8 +197,8 @@ WorkingDirectory=$INSTALL_DIR
 Environment=PORT=${PORT}
 Restart=always
 RestartSec=10
-StandardOutput=syslog
-StandardError=syslog
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=mediagrab
 User=$(whoami)
 
@@ -180,10 +207,28 @@ WantedBy=multi-user.target
 EOL
 
 # Install the service
+print_message "Installing and starting the service..."
 sudo cp "$SERVICE_FILE" /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable mediagrab
-sudo systemctl start mediagrab
+
+# Create a start script for manual use
+START_SCRIPT="$INSTALL_DIR/start_mediagrab.sh"
+cat > "$START_SCRIPT" << EOL
+#!/bin/bash
+cd "$INSTALL_DIR"
+source "$INSTALL_DIR/venv/bin/activate"
+PORT=${PORT} NODE_ENV=production npm run dev
+EOL
+chmod +x "$START_SCRIPT"
+
+# Try to start the service
+print_message "Attempting to start the MediaGrab service..."
+if sudo systemctl start mediagrab; then
+    print_message "Service started successfully!"
+else
+    print_warning "Failed to start service. You can try running it manually with: $START_SCRIPT"
+fi
 
 # Create a sample Nginx configuration
 print_message "Creating Nginx configuration sample..."
