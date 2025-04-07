@@ -64,24 +64,27 @@ print_message "Setting up application directory..."
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# Clone the repository (check if directory exists first)
-print_message "Downloading MediaGrab..."
-if [ -d "$INSTALL_DIR/.git" ]; then
-    print_message "Directory already exists, updating from git..."
-    cd "$INSTALL_DIR"
-    git pull
-else
-    # First remove the directory if it exists but isn't a git repo
-    if [ -d "$INSTALL_DIR" ]; then
-        rm -rf "$INSTALL_DIR"
-    fi
-    # Clone the repository
-    git clone https://github.com/yourusername/mediagrab.git "$INSTALL_DIR" || {
-        print_error "Failed to clone repository. Please check your internet connection or repository URL."
-        exit 1
-    }
-    cd "$INSTALL_DIR"
+# Get the current script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIR="$( dirname "$SCRIPT_DIR" )"
+
+# Copy files from local directory instead of cloning from GitHub
+print_message "Setting up MediaGrab from local directory..."
+if [ -d "$INSTALL_DIR" ] && [ ! -f "$INSTALL_DIR/.installed_from_local" ]; then
+    print_warning "Directory exists but wasn't installed from local files. Backing up and reinstalling..."
+    mv "$INSTALL_DIR" "${INSTALL_DIR}_backup_$(date +%Y%m%d%H%M%S)"
+    mkdir -p "$INSTALL_DIR"
 fi
+
+# Create directory if it doesn't exist
+mkdir -p "$INSTALL_DIR"
+
+# Copy all files from the parent directory
+print_message "Copying application files from local directory..."
+cp -r "$PARENT_DIR"/* "$INSTALL_DIR/"
+# Create a marker file to indicate local installation
+touch "$INSTALL_DIR/.installed_from_local"
+cd "$INSTALL_DIR"
 
 # Set up Python virtual environment
 print_message "Setting up Python virtual environment..."
