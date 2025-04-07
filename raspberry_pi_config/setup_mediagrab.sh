@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # MediaGrab Installation Script for Raspberry Pi with Nginx proxy

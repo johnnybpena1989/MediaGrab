@@ -1,0 +1,165 @@
+Linux stream-pi 6.6.74+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.6.74-1+rpt1 (2025-01-27) aarch64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+admin@stream-pi:~ $ sudo systemctl stop mediagrab
+sudo systemctl disable mediagrab
+Failed to stop mediagrab.service: Unit mediagrab.service not loaded.
+Failed to disable unit: Unit file mediagrab.service does not exist.
+admin@stream-pi:~ $ sudo systemctl disable media-downloader
+Removed "/etc/systemd/system/multi-user.target.wants/media-downloader.service".
+admin@stream-pi:~ $ sudo systemctl stop media-downloaderadmin@stream-pi:~ $ sudo systemctl disable media-downloadersudo rm /etc/systemd/system/media-downloader.service
+sudo systemctl daemon-reload^C
+admin@stream-pi:~ $ sudo rm /etc/systemd/system/media-downloader.service
+sudo systemctl daemon-reload
+admin@stream-pi:~ $ ls
+choreoprint_output                  recording_app.log
+mediaharvester                      recordings
+MediaHarvester.zip                  record_stream.sh
+  GNU nano 7.2       setup_mediagrab.sh                 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+admin@stream-pi:~/YoutubeDownloader/raspberry_pi_config $ ls
+modified_index.ts  setup_mediagrab.sh
+README.md          update_yt-dlp.sh
+admin@stream-pi:~/YoutubeDownloader/raspberry_pi_config $ sudo bash setup_mediagrab.sh
+================================================
+     MediaGrab Installation Script       
+================================================
+
+This script will install MediaGrab with Nginx proxy configuration.
+It will be configured to run on port 5050 and be accessible at /mediagrab/
+
+Continue with installation? (y/n): y
+Installing dependencies...
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Get:2 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+Get:3 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+Hit:4 https://deb.nodesource.com/node_20.x nodistro InRelease
+Get:5 http://archive.raspberrypi.com/debian bookworm InRelease [39.3 kB]
+Get:6 http://archive.raspberrypi.com/debian bookworm/main armhf Packages [559 kB]
+Get:7 http://archive.raspberrypi.com/debian bookworm/main arm64 Packages [531 kB]
+Fetched 1,233 kB in 3s (380 kB/s) 
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+nodejs is already the newest version (20.19.0-1nodesource1).
+ffmpeg is already the newest version (8:5.1.6-0+deb12u1+rpt3).
+python3 is already the newest version (3.11.2-1+b1).
+python3-pip is already the newest version (23.0.1+dfsg-1+rpt1).
+python3-venv is already the newest version (3.11.2-1+b1).
+git is already the newest version (1:2.39.5-0+deb12u2).
+Some packages could not be installed. This may mean that you have
+requested an impossible situation or if you are using the unstable
+distribution that some required packages have not yet been created
+or been moved out of Incoming.
+The following information may help to resolve the situation:
+
+The following packages have unmet dependencies:
+ eslint : Depends: nodejs:any (>= 12.22.0)
+          Recommends: node-js-yaml but it is not installable
+ libnode108 : Conflicts: nodejs-legacy
+ node-acorn : Depends: nodejs:any or
+                       nodejs (< 12.22.5~dfsg-4~)
+ node-ajv : Depends: nodejs:any
+ node-archy : Depends: nodejs:any
+ node-babel7 : Depends: nodejs:any
+ node-browserslist : Depends: nodejs:any
+ node-chalk : Depends: nodejs:any (>= 14)
+ node-css-selector-tokenizer : Depends: nodejs:any
+ node-decamelize : Depends: nodejs:any
+ node-defined : Depends: nodejs:any
+ node-doctrine : Depends: nodejs:any
+ node-errno : Depends: nodejs:any
+ node-es6-error : Depends: nodejs:any
+ node-escodegen : Depends: node-esprima but it is not installable
+                  Depends: nodejs:any
+ node-globby : Depends: nodejs:any
+ node-gyp : Depends: nodejs:any
+ node-ignore : Depends: nodejs:any
+ node-is-glob : Depends: nodejs:any
+ node-is-number : Depends: nodejs:any
+ node-is-path-inside : Depends: nodejs:any
+ node-istanbul : Depends: node-esprima but it is not installable
+                 Depends: node-js-yaml but it is not installable
+                 Depends: nodejs:any (>= 12)
+ node-jest-worker : Depends: node-types-node
+ node-json5 : Depends: nodejs:any
+ node-lodash : Depends: nodejs:any
+ node-mime : Depends: nodejs:any
+ node-mkdirp : Depends: nodejs:any
+ node-ms : Depends: nodejs:any
+ node-nopt : Depends: nodejs:any
+ node-normalize-path : Depends: nodejs:any
+ node-object-assign : Depends: nodejs:any
+ node-picocolors : Depends: nodejs:any
+ node-postcss : Depends: nodejs:any
+ node-progress : Depends: nodejs:any
+ node-punycode : Depends: nodejs:any
+ node-regjsparser : Depends: nodejs:any
+ node-rimraf : Depends: nodejs:any
+ node-semver : Depends: nodejs:any
+ node-strip-ansi : Depends: nodejs:any
+ node-tape : Depends: nodejs:any
+ node-unicode-match-property-ecmascript : Depends: nodejs:any
+ node-v8-compile-cache : Depends: nodejs:any (>= 14)
+ node-which : Depends: nodejs:any
+ node-write : Depends: nodejs:any
+ nodejs : Conflicts: npm
+ npm : Depends: nodejs:any
+       Recommends: node-tap but it is not installable
+ terser : Depends: nodejs:any
+ webpack : Depends: nodejs:any
+E: Unable to correct problems, you have held broken packages.
+admin@stream-pi:~/YoutubeDownloader/raspberry_pi_config $ 
