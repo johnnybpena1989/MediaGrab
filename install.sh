@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# Media Downloader Installer/Updater Script for Raspberry Pi
-# This script installs or updates the Media Downloader application
+# Media Downloader Installer/Updater/Uninstaller Script for Raspberry Pi
+# This script installs, updates, or uninstalls the Media Downloader application
 # with production build, virtual environment and nginx proxy support
 
-set -e  # Exit on any error
+# Don't exit on error during uninstall as some components might not exist
+if [[ "$1" != "uninstall" ]]; then
+  set -e  # Exit on any error
+fi
 
 # Text formatting
 BOLD='\033[1m'
@@ -41,6 +44,16 @@ echo -e "${BOLD}================================================${NC}"
 echo -e "${GREEN}${BOLD}   Media Downloader Installer/Updater    ${NC}"
 echo -e "${BOLD}================================================${NC}"
 echo ""
+echo "Usage options:"
+echo "  ./install.sh         - Install or update Media Downloader"
+echo "  ./install.sh uninstall - Uninstall Media Downloader"
+echo ""
+
+# Check if script was called with uninstall parameter first
+if [[ "$1" == "uninstall" ]]; then
+    uninstall_app
+    exit 0
+fi
 
 # Get GitHub repository URL if not specified
 if [ "$GITHUB_REPO" = "https://github.com/johnnybpena1989/MediaGrab.git" ]; then
@@ -385,3 +398,67 @@ if [ "$IS_UPDATE" = true ]; then
 else
     print_message "Installation complete! Enjoy your Media Downloader application!"
 fi
+
+# Uninstall function - called when script is invoked with 'uninstall' parameter
+uninstall_app() {
+    clear
+    echo -e "${BOLD}================================================${NC}"
+    echo -e "${RED}${BOLD}   Media Downloader Uninstaller    ${NC}"
+    echo -e "${BOLD}================================================${NC}"
+    echo ""
+    
+    # Ask for installation directory to uninstall
+    read -p "Enter the installation directory to uninstall [$INSTALL_DIR]: " uninstall_dir
+    UNINSTALL_DIR=${uninstall_dir:-$INSTALL_DIR}
+    
+    if [ ! -d "$UNINSTALL_DIR" ] || [ ! -f "$UNINSTALL_DIR/package.json" ]; then
+        print_error "Media Downloader not found at $UNINSTALL_DIR!"
+        exit 1
+    fi
+    
+    print_warning "WARNING: This will completely remove Media Downloader from your system."
+    print_warning "Including all configuration files and downloaded media."
+    read -p "Are you sure you want to uninstall? (yes/no): " confirm
+    if [[ $confirm != "yes" ]]; then
+        print_error "Uninstallation cancelled."
+        exit 1
+    fi
+    
+    print_message "Step 1: Stopping service..."
+    # Stop and disable the service
+    if systemctl is-enabled --quiet media-downloader; then
+        sudo systemctl stop media-downloader
+        sudo systemctl disable media-downloader
+    fi
+    
+    print_message "Step 2: Removing service file..."
+    # Remove the systemd service file
+    if [ -f "/etc/systemd/system/media-downloader.service" ]; then
+        sudo rm /etc/systemd/system/media-downloader.service
+        sudo systemctl daemon-reload
+    fi
+    
+    print_message "Step 3: Checking for Nginx configuration..."
+    # Check if Nginx is using our config
+    NGINX_CONF=$(find "$UNINSTALL_DIR" -name "nginx-*.conf" -type f | head -1)
+    if [ -n "$NGINX_CONF" ]; then
+        NGINX_PATH=$(grep -o "location /[^/]*" "$NGINX_CONF" | head -1 | sed 's/location //')
+        INCLUDE_LINE="include $NGINX_CONF;"
+        print_warning "You may need to manually remove the following line from your Nginx configuration:"
+        echo "$INCLUDE_LINE"
+        print_warning "And then reload Nginx with: sudo systemctl reload nginx"
+    fi
+    
+    print_message "Step 4: Removing application files..."
+    # Remove the installation directory
+    rm -rf "$UNINSTALL_DIR"
+    
+    print_message "Media Downloader has been successfully uninstalled."
+    echo ""
+    echo -e "${BOLD}================================================${NC}"
+    print_message "Uninstallation complete! Media Downloader has been removed."
+    echo -e "${BOLD}================================================${NC}"
+}
+
+# uninstall function is called at the beginning of the script
+# when "$1" is "uninstall"
