@@ -1,10 +1,18 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import type { BaseLocationHook } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import { useEffect, useState } from "react";
+
+// Add BASE_PATH to Window interface
+declare global {
+  interface Window {
+    BASE_PATH?: string;
+  }
+}
 
 // Get base path from environment or from meta tag
 const getBasePath = (): string => {
@@ -13,7 +21,9 @@ const getBasePath = (): string => {
   if (envBase) return envBase.endsWith('/') ? envBase : envBase + '/';
   
   // Then from window object if set by our nginx-subpath.ts script
-  if (window.BASE_PATH) return window.BASE_PATH.endsWith('/') ? window.BASE_PATH : window.BASE_PATH + '/';
+  if (typeof window !== 'undefined' && window.BASE_PATH) {
+    return window.BASE_PATH.endsWith('/') ? window.BASE_PATH : window.BASE_PATH + '/';
+  }
   
   // Then try to get from the X-Base-Path header (saved in meta)
   const metaBase = document.querySelector('meta[name="base-path"]')?.getAttribute('content');
@@ -27,8 +37,8 @@ const getBasePath = (): string => {
   return '/';
 };
 
-// Create a base location hook for wouter
-const useBaseLocation = () => {
+// Create a base location hook for wouter that matches BaseLocationHook type
+const useBaseLocation: BaseLocationHook = () => {
   const [location, setLocation] = useState(window.location.pathname);
   const basePath = getBasePath();
   
@@ -50,8 +60,21 @@ const useBaseLocation = () => {
     };
   }, []);
   
-  // Return the adjusted location
-  return [adjustedLocation, setLocation];
+  // Return the adjusted location and a navigate function
+  // that handles the base path
+  return [
+    adjustedLocation, 
+    (to: string) => {
+      // If it's an absolute path, prepend the base path
+      if (to.startsWith('/')) {
+        to = basePath + to.slice(1);
+      }
+      
+      // Update browser history and location state
+      window.history.pushState(null, '', to);
+      setLocation(to);
+    }
+  ];
 };
 
 // Custom router that handles base path
