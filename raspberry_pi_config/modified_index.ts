@@ -9,7 +9,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Configure for Nginx subpath if environment variable is set
-const basePath = process.env.VITE_BASE_URL || '/';
+const basePath = process.env.VITE_BASE_URL || '/mediagrab';
+console.log('Using base path:', basePath);
 configureForNginxSubpath(app, basePath);
 
 // Setup session middleware

@@ -55,10 +55,14 @@ export function configureForNginxSubpath(app: Express, basePath: string) {
       res.send = function(body: any) {
         if (typeof body === 'string' && res.get('Content-Type')?.includes('text/html')) {
           // Adjust asset paths in HTML
+          body = body.replace(/(href|src)="\/assets\//g, `$1="${basePath}/assets/`);
           body = body.replace(/(href|src)="\/(?!\/)/g, `$1="${basePath}/`);
           
           // Also fix any asset paths without leading slash
           body = body.replace(/(href|src)="(?!http|\/|#)/g, `$1="${basePath}/`);
+          
+          // Fix specific case for assets
+          body = body.replace(/\/assets\//g, `${basePath}/assets/`);
           
           // Add a base tag if not present
           if (!body.includes('<base')) {

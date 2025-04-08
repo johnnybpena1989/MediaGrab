@@ -1,0 +1,106 @@
+server {
+    listen 8081 default_server;
+    listen [::]:8081 default_server;
+
+    server_name _;
+
+    # Proxy Flask App
+    location / {
+        proxy_pass http://127.0.0.1:5000;  # Forward root requests to Flask (port 5000)
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    include /home/admin/mediagrab/nginx-mediagrab.conf;
+
+    # Proxy Camera 1
+    location /stream1/ {
+        proxy_pass http://10.0.0.15:9090/;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+
+        # Add CORS headers for browser compatibility
+        add_header Access-Control-Allow-Origin "*";
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        add_header Access-Control-Allow-Headers "Range";
+        add_header Access-Control-Expose-Headers "Content-Length, Content-Range";
+    }
+
+    # Proxy Camera 2
+    location /stream2/ {
+        proxy_pass http://10.0.0.15:9091/;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Add CORS headers for browser compatibility
+        add_header Access-Control-Allow-Origin "*";
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        add_header Access-Control-Allow-Headers "Range";
+        add_header Access-Control-Expose-Headers "Content-Length, Content-Range";
+    }
+
+    # Proxy Camera 3
+    location /stream3/ {
+        proxy_pass http://10.0.0.15:9092/;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Add CORS headers for browser compatibility
+        add_header Access-Control-Allow-Origin "*";
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        add_header Access-Control-Allow-Headers "Range";
+        add_header Access-Control-Expose-Headers "Content-Length, Content-Range";
+    }
+
+    # Optional: Fallback for unmatched locations
+    location /fallback {
+        return 404;
+    }
+}
+
+        # pass PHP scripts to FastCGI server
+        #
+        #location ~ \.php$ {
+        #       include snippets/fastcgi-php.conf;
+        #
+        #       # With php-fpm (or other unix sockets):
+        #       fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+        #       # With php-cgi (or other tcp sockets):
+        #       fastcgi_pass 127.0.0.1:9000;
+        #}
+
+        # deny access to .htaccess files, if Apache's document root
+        # concurs with nginx's one
+        #
+        #location ~ /\.ht {
+        #       deny all;
+        #}
+#}
+
+
+# Virtual Host configuration for example.com
+#
+# You can move that to a different file under sites-available/ and symlink that
+# to sites-enabled/ to enable it.
+#
+#server {
+#       listen 80;
+#       listen [::]:80;
+#
+#       server_name example.com;
+#
+#       root /var/www/example.com;
+#       index index.html;
+#
+#       location / {
+#               try_files $uri $uri/ =404;
+#       }
+#}
