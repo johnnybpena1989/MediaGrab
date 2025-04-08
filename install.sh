@@ -21,8 +21,7 @@ INSTALL_DIR="/home/admin/mediagrab"
 DEFAULT_PORT=5050
 NGINX_PATH="/mediagrab"
 
-# GitHub repository URL
-# You will need to replace this with your actual GitHub repository URL
+# GitHub repository URL for this specific application
 GITHUB_REPO="https://github.com/johnnybpena1989/MediaGrab.git"
 
 # Function to print colorful messages
@@ -55,15 +54,7 @@ if [[ "$1" == "uninstall" ]]; then
     exit 0
 fi
 
-# Get GitHub repository URL if not specified
-if [ "$GITHUB_REPO" = "https://github.com/johnnybpena1989/MediaGrab.git" ]; then
-    read -p "Enter your GitHub repository URL: " custom_repo
-    if [ -z "$custom_repo" ]; then
-        print_error "GitHub repository URL is required."
-        exit 1
-    fi
-    GITHUB_REPO=$custom_repo
-fi
+# GitHub repository URL is hardcoded for this specific application
 
 # Check if this is an update or new installation
 IS_UPDATE=false
