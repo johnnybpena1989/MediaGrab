@@ -14,13 +14,13 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Default installation directory and port
-INSTALL_DIR="$HOME/media-downloader"
+INSTALL_DIR="/home/admin/mediagrab"
 DEFAULT_PORT=5050
 NGINX_PATH="/mediagrab"
 
 # GitHub repository URL
 # You will need to replace this with your actual GitHub repository URL
-GITHUB_REPO="https://github.com/yourusername/media-downloader.git"
+GITHUB_REPO="https://github.com/johnnybpena1989/MediaGrab.git"
 
 # Function to print colorful messages
 print_message() {
@@ -43,7 +43,7 @@ echo -e "${BOLD}================================================${NC}"
 echo ""
 
 # Get GitHub repository URL if not specified
-if [ "$GITHUB_REPO" = "https://github.com/yourusername/media-downloader.git" ]; then
+if [ "$GITHUB_REPO" = "https://github.com/johnnybpena1989/MediaGrab.git" ]; then
     read -p "Enter your GitHub repository URL: " custom_repo
     if [ -z "$custom_repo" ]; then
         print_error "GitHub repository URL is required."
@@ -312,8 +312,8 @@ cat > "$NGINX_CONF" << EOF
 # Include this file in your nginx configuration with:
 # include $NGINX_CONF;
 
-location $NGINX_PATH/ {
-    proxy_pass http://localhost:$PORT/;
+location ${NGINX_PATH}/ {
+    proxy_pass http://localhost:${PORT}/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection 'upgrade';
@@ -322,7 +322,7 @@ location $NGINX_PATH/ {
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_set_header X-Forwarded-Host \$host;
-    proxy_set_header X-Forwarded-Prefix $NGINX_PATH;
+    proxy_set_header X-Forwarded-Prefix ${NGINX_PATH};
 }
 EOF
 
