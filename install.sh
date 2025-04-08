@@ -64,13 +64,9 @@ if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/package.json" ]; then
         exit 1
     fi
     
-    # Get existing port from configuration
-    if [ -f "$INSTALL_DIR/server/index.ts" ]; then
-        EXISTING_PORT=$(grep -o "const port = .*" "$INSTALL_DIR/server/index.ts" | grep -o "[0-9]*")
-        if [ ! -z "$EXISTING_PORT" ]; then
-            DEFAULT_PORT=$EXISTING_PORT
-        fi
-    fi
+    # During updates, always use port 5050 for consistency
+    DEFAULT_PORT=5050
+    print_message "Using port 5050 for Media Downloader application"
 else
     echo "This script will install the Media Downloader application on your Raspberry Pi."
     # Ask for installation directory
