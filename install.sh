@@ -313,7 +313,7 @@ cat > "$NGINX_CONF" << EOF
 # include $NGINX_CONF;
 
 location ${NGINX_PATH}/ {
-    proxy_pass http://localhost:${PORT}/;
+    proxy_pass http://127.0.0.1:${PORT}/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection 'upgrade';
@@ -371,7 +371,7 @@ echo -e "${BOLD}================================================${NC}"
 echo ""
 echo "The application is now running on port $PORT."
 echo "You can access it via your nginx proxy at $NGINX_PATH"
-echo "Direct access (for testing): http://localhost:$PORT or http://$(hostname -I | awk '{print $1}'):$PORT"
+echo "Direct access (for testing): http://127.0.0.1:$PORT or http://$(hostname -I | awk '{print $1}'):$PORT"
 echo ""
 echo "To use with Nginx:"
 echo "1. Make sure nginx is installed: sudo apt install nginx"
