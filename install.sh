@@ -62,6 +62,13 @@ if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/package.json" ]; then
     IS_UPDATE=true
     print_warning "Existing installation detected at $INSTALL_DIR"
     echo "This script will update your existing installation."
+    
+    # Check if server/index.ts has port 5000 hardcoded
+    if [ -f "$INSTALL_DIR/server/index.ts" ] && grep -q "const port = 5000" "$INSTALL_DIR/server/index.ts"; then
+        print_warning "Detected hardcoded port 5000 in server/index.ts!"
+        print_message "This will be fixed during the update to use port 5050 consistently."
+    fi
+    
     read -p "Continue with update? (y/n): " confirm
     if [[ $confirm != [yY] && $confirm != [yY][eE][sS] ]]; then
         print_error "Update cancelled."
@@ -251,6 +258,10 @@ if [ -f "vite.config.ts" ]; then
     fi
 fi
 
+# Ensure we're using 127.0.0.1 instead of localhost in all files
+find . -type f -name "*.ts" -o -name "*.js" -o -name "*.json" | xargs sed -i 's/localhost:5050/127.0.0.1:5050/g'
+find . -type f -name "*.ts" -o -name "*.js" -o -name "*.json" | xargs sed -i 's/localhost:5000/127.0.0.1:5050/g'
+
 # Set up Python virtual environment
 print_message "Step 5: Setting up Python virtual environment..."
 if [ ! -d "$INSTALL_DIR/venv" ]; then
@@ -319,10 +330,17 @@ location ${NGINX_PATH}/ {
     proxy_set_header Connection 'upgrade';
     proxy_set_header Host \$host;
     proxy_cache_bypass \$http_upgrade;
+    
+    # These headers are critical for the application to work with a subpath
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Forwarded-Prefix ${NGINX_PATH};
+    
+    # Increase timeouts for downloading large files
+    proxy_connect_timeout 300s;
+    proxy_send_timeout 300s;
+    proxy_read_timeout 300s;
 }
 EOF
 

@@ -2,10 +2,15 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { configureForNginxSubpath } from "./nginx-subpath";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Configure for Nginx subpath if environment variable is set
+const basePath = process.env.VITE_BASE_URL || '/';
+configureForNginxSubpath(app, basePath);
 
 // Setup session middleware
 app.use(session({
@@ -67,7 +72,7 @@ app.use((req, res, next) => {
 
   // Allow the port to be configurable via environment variable
   // This enables the Raspberry Pi install script to use a custom port
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5050;
   server.listen({
     port,
     host: "0.0.0.0",
